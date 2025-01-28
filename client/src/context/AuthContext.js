@@ -109,7 +109,6 @@ export const AuthProvider = ({ children }) => {
           ...response.data.user,
           token: response.data.token,
           refreshToken: response.data.refreshToken,
-          line_user_id: response.data.user.line_user_id || null,
         };
 
         api.defaults.headers.common[
@@ -131,41 +130,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateUserLineId = async (lineUserId) => {
-    try {
-      const response = await api.patch(`/users/${user.id}/line`, {
-        line_user_id: lineUserId,
-      });
-
-      if (response.data.success) {
-        const updatedUser = {
-          ...user,
-          line_user_id: lineUserId,
-        };
-        setUser(updatedUser);
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        return { success: true };
-      }
-      return { success: false, error: response.data.message };
-    } catch (error) {
-      if (error.response?.status === 401) {
-        const refreshed = await refreshToken();
-        if (refreshed) {
-          return await updateUserLineId(lineUserId);
-        }
-      }
-      return {
-        success: false,
-        error: error.response?.data?.message || "Error updating LINE ID",
-      };
-    }
-  };
-
-  // Initialize auth state once
   useEffect(() => {
     const initialize = async () => {
       if (!user || initialized) return;
-
       try {
         setLoading(true);
         await refreshUserData();
@@ -186,7 +153,6 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     loading,
-    updateUserLineId,
     refreshUserData,
     refreshToken,
     isAdmin: user?.role === "admin",

@@ -8,18 +8,21 @@ const {
   generateAccessToken,
   generateRefreshToken,
 } = require("../middleware/auth");
+const bcrypt = require("bcrypt");
+
+const hashPassword = async (password) => {
+  const saltRounds = 10;
+  return await bcrypt.hash(password, saltRounds);
+};
 
 router.get("/", auth, async (req, res) => {
   try {
     let query = `
-      SELECT id, student_id, firstname, lastname, role, branch 
-      FROM users 
-      WHERE 1=1
+      SELECT id, username, firstname, lastname, role, branch 
+      FROM users WHERE 1=1
     `;
-
     const queryParams = [];
 
-    // Filter by role if specified
     if (req.query.role) {
       const roles = Array.isArray(req.query.role)
         ? req.query.role
@@ -29,13 +32,9 @@ router.get("/", auth, async (req, res) => {
     }
 
     query += ` ORDER BY role DESC, firstname ASC`;
-
     const [users] = await db.execute(query, queryParams);
 
-    res.json({
-      success: true,
-      data: users,
-    });
+    res.json({ success: true, data: users });
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({
@@ -48,50 +47,59 @@ router.get("/", auth, async (req, res) => {
 // Login route
 router.post("/login", async (req, res) => {
   try {
-    const { student_id, password } = req.body;
+    const { username, password } = req.body;
 
-    // Validate input
-    if (!student_id || !password) {
+    if (!username || !password) {
       return res.status(400).json({
         success: false,
-        message: "กรุณากรอกรหัสนักศึกษาและรหัสผ่าน",
+        message: "กรุณากรอกรหัสผู้ใช้และรหัสผ่าน",
       });
     }
 
-    // Get user from database
-    const [users] = await db.execute(
-      "SELECT * FROM users WHERE student_id = ?",
-      [student_id]
-    );
+    const [users] = await db.execute("SELECT * FROM users WHERE username = ?", [
+      username,
+    ]);
 
-    // Check if user exists and password matches
-    if (users.length === 0 || password !== users[0].password) {
+    if (users.length === 0) {
       return res.status(401).json({
         success: false,
-        message: "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง",
+        message: "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
       });
     }
 
     const user = users[0];
 
-    // Generate tokens
+    // Try both methods - for compatibility during transition
+    let passwordMatch = false;
+
+    // First try direct comparison (for old passwords)
+    if (password === user.password) {
+      passwordMatch = true;
+    } else {
+      // Then try bcrypt comparison (for new hashed passwords)
+      try {
+        passwordMatch = await bcrypt.compare(password, user.password);
+      } catch (error) {
+        // If bcrypt.compare fails, it means the stored password isn't a hash
+        passwordMatch = false;
+      }
+    }
+
+    if (!passwordMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+      });
+    }
+
     const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
 
-    // Store refresh token in database
-    await db.execute("UPDATE users SET refresh_token = ? WHERE id = ?", [
-      refreshToken,
-      user.id,
-    ]);
-
-    // Send response with tokens and user data
     res.json({
       success: true,
       token: accessToken,
-      refreshToken: refreshToken,
       user: {
         id: user.id,
-        student_id: user.student_id,
+        username: user.username,
         firstname: user.firstname,
         lastname: user.lastname,
         role: user.role,
@@ -110,38 +118,30 @@ router.post("/login", async (req, res) => {
 // Register route
 router.post("/register", async (req, res) => {
   try {
-    const { student_id, password, firstname, lastname, branch } = req.body;
+    const { username, password, firstname, lastname, branch } = req.body;
 
-    // Validate input
-    if (!student_id || !password || !firstname || !lastname || !branch) {
+    // Input validation remains the same
+    if (!username || !password || !firstname || !lastname || !branch) {
       return res.status(400).json({
         success: false,
         message: "กรุณากรอกข้อมูลให้ครบถ้วน",
       });
     }
 
-    // Validate student ID format
-    if (!/^\d{8}$/.test(student_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "รหัสนักศึกษาต้องเป็นตัวเลข 8 หลักเท่านั้น",
-      });
-    }
-
-    // Check existing user
+    // Check for existing user
     const [existingUsers] = await db.execute(
-      "SELECT id FROM users WHERE student_id = ?",
-      [student_id]
+      "SELECT id FROM users WHERE username = ?",
+      [username]
     );
 
     if (existingUsers.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "รหัสนักศึกษานี้มีในระบบแล้ว",
+        message: "รหัสผู้ใช้นี้มีในระบบแล้ว",
       });
     }
 
-    // Validate password length
+    // Password length validation
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
@@ -149,16 +149,16 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // Hash password
+    // Hash the password before saving
     const hashedPassword = await hashPassword(password);
 
-    // Create user
+    // Save user with hashed password
     await db.execute(
-      "INSERT INTO users (student_id, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
-      [student_id, hashedPassword, firstname, lastname, "student", branch]
+      "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
+      [username, hashedPassword, firstname, lastname, "student", branch]
     );
 
-    res.status(201).json({
+    res.json({
       success: true,
       message: "ลงทะเบียนสำเร็จ",
     });
@@ -166,7 +166,7 @@ router.post("/register", async (req, res) => {
     console.error("Registration error:", error);
     res.status(500).json({
       success: false,
-      message: "เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่อีกครั้ง",
+      message: "เกิดข้อผิดพลาดในการลงทะเบียน",
     });
   }
 });
@@ -223,25 +223,14 @@ router.patch("/:id/role", auth, checkRole(["admin"]), async (req, res) => {
 });
 
 // Update LINE user ID
-router.patch("/:id/line", auth, async (req, res) => {
+router.patch("/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { line_user_id } = req.body;
+    const { firstname, lastname, branch } = req.body;
 
-    console.log(`Updating LINE ID for user ${id}:`, line_user_id);
-
-    // Validate input
-    if (!line_user_id) {
-      return res.status(400).json({
-        success: false,
-        message: "LINE User ID is required",
-      });
-    }
-
-    // Update user
     const [result] = await db.query(
-      "UPDATE users SET line_user_id = ?, updated_at = NOW() WHERE id = ?",
-      [line_user_id, id]
+      "UPDATE users SET firstname = ?, lastname = ?, branch = ?, updated_at = NOW() WHERE id = ?",
+      [firstname, lastname, branch, id]
     );
 
     if (result.affectedRows === 0) {
@@ -251,22 +240,21 @@ router.patch("/:id/line", auth, async (req, res) => {
       });
     }
 
-    // Fetch updated user data
     const [rows] = await db.query(
-      "SELECT id, student_id, firstname, lastname, role, line_user_id FROM users WHERE id = ?",
+      "SELECT id, username, firstname, lastname, role, branch FROM users WHERE id = ?",
       [id]
     );
 
     res.json({
       success: true,
-      message: "LINE User ID updated successfully",
+      message: "Profile updated successfully",
       user: rows[0],
     });
   } catch (error) {
-    console.error("Error updating LINE User ID:", error);
+    console.error("Error updating profile:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating LINE User ID",
+      message: "Error updating profile",
       error: error.message,
     });
   }
@@ -275,40 +263,30 @@ router.patch("/:id/line", auth, async (req, res) => {
 router.get("/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Fetch user data
     const [users] = await db.execute(
-      `SELECT id, student_id, firstname, lastname, role, branch, line_user_id, 
-       created_at, updated_at 
+      `SELECT id, username, firstname, lastname, role, branch, created_at, updated_at 
        FROM users WHERE id = ?`,
       [id]
     );
 
     if (users.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "ไม่พบผู้ใช้งาน",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "ไม่พบผู้ใช้งาน" });
     }
 
-    // Only allow users to view their own profile or admins to view any profile
     if (req.user.role !== "admin" && req.user.id !== parseInt(id)) {
-      return res.status(403).json({
-        success: false,
-        message: "ไม่มีสิทธิ์ในการเข้าถึงข้อมูล",
-      });
+      return res
+        .status(403)
+        .json({ success: false, message: "ไม่มีสิทธิ์ในการเข้าถึงข้อมูล" });
     }
 
-    res.json({
-      success: true,
-      user: users[0],
-    });
+    res.json({ success: true, user: users[0] });
   } catch (error) {
     console.error("Error fetching user:", error);
-    res.status(500).json({
-      success: false,
-      message: "เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้",
-    });
+    res
+      .status(500)
+      .json({ success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้" });
   }
 });
 
@@ -457,6 +435,145 @@ router.post("/refresh-token", async (req, res) => {
     res.status(401).json({
       success: false,
       message: "Invalid refresh token",
+    });
+  }
+});
+
+router.post(
+  "/new",
+  auth,
+  checkRole(["admin", "equipment_manager"]),
+  async (req, res) => {
+    try {
+      const { username, password, firstname, lastname, branch, role } =
+        req.body;
+
+      // Validate input
+      if (
+        !username ||
+        !password ||
+        !firstname ||
+        !lastname ||
+        !branch ||
+        !role
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "กรุณากรอกข้อมูลให้ครบถ้วน",
+        });
+      }
+
+      // Check existing user
+      const [existingUsers] = await db.execute(
+        "SELECT id FROM users WHERE username = ?",
+        [username]
+      );
+
+      if (existingUsers.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "รหัสผู้ใช้นี้มีในระบบแล้ว",
+        });
+      }
+
+      // Hash password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Insert user with hashed password
+      await db.execute(
+        "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
+        [username, hashedPassword, firstname, lastname, role, branch]
+      );
+
+      res.status(201).json({
+        success: true,
+        message: "เพิ่มผู้ใช้สำเร็จ",
+      });
+    } catch (error) {
+      console.error("Error adding user:", error);
+      res.status(500).json({
+        success: false,
+        message: "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้",
+      });
+    }
+  }
+);
+
+router.post(
+  "/admin-reset-password",
+  auth,
+  checkRole(["admin"]),
+  async (req, res) => {
+    try {
+      const { username, newPassword } = req.body;
+
+      // First check if user exists
+      const [users] = await db.execute(
+        "SELECT id FROM users WHERE username = ?",
+        [username]
+      );
+
+      if (users.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "ไม่พบบัญชีผู้ใช้นี้",
+        });
+      }
+
+      // Hash the new password before saving
+      const hashedPassword = await hashPassword(newPassword);
+
+      // Update with hashed password
+      await db.execute("UPDATE users SET password = ? WHERE id = ?", [
+        hashedPassword,
+        users[0].id,
+      ]);
+
+      res.json({
+        success: true,
+        message: "รีเซ็ตรหัสผ่านสำเร็จ",
+      });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      res.status(500).json({
+        success: false,
+        message: "เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน",
+      });
+    }
+  }
+);
+
+router.post("/change-password", auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const [user] = await db.execute("SELECT * FROM users WHERE id = ?", [
+      req.user.id,
+    ]);
+
+    const isValid = await bcrypt.compare(currentPassword, user[0].password);
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: "รหัสผ่านปัจจุบันไม่ถูกต้อง",
+      });
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    await db.execute("UPDATE users SET password = ? WHERE id = ?", [
+      hashedPassword,
+      req.user.id,
+    ]);
+
+    res.json({
+      success: true,
+      message: "เปลี่ยนรหัสผ่านสำเร็จ",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน",
     });
   }
 });

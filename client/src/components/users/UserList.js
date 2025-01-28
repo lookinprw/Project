@@ -20,12 +20,10 @@ function UserList() {
     equipment_assistant: "ผู้ช่วยดูแลครุภัณฑ์",
   };
 
-  // Define available roles based on current user's role
   const getAvailableRoles = (currentUserRole) => {
     if (currentUserRole === "admin") {
-      return ROLE_OPTIONS; // Admin can assign all roles
+      return ROLE_OPTIONS;
     } else if (currentUserRole === "equipment_manager") {
-      // Equipment manager can only assign student and equipment_assistant roles
       return {
         student: ROLE_OPTIONS.student,
         equipment_assistant: ROLE_OPTIONS.equipment_assistant,
@@ -34,32 +32,19 @@ function UserList() {
     return {};
   };
 
-  // Check if user can modify another user's role
   const canModifyRole = (targetUser) => {
-    if (currentUser.role === "admin") {
-      return true; // Admin can modify any role
-    }
+    if (currentUser.role === "admin") return true;
     if (currentUser.role === "equipment_manager") {
-      // Equipment manager can't modify admins, equipment managers,
-      // and can't change anyone to equipment_manager
       return !["admin", "equipment_manager"].includes(targetUser.role);
     }
     return false;
   };
 
-  // Check if user can delete another user
   const canDeleteUser = (targetUser) => {
-    if (targetUser.student_id === currentUser.student_id) {
-      return false; // Can't delete self
-    }
-    if (targetUser.role === "admin") {
-      return false; // Can't delete admins
-    }
-    if (currentUser.role === "admin") {
-      return true;
-    }
+    if (targetUser.username === currentUser.username) return false;
+    if (targetUser.role === "admin") return false;
+    if (currentUser.role === "admin") return true;
     if (currentUser.role === "equipment_manager") {
-      // Equipment manager can't delete admins or other equipment managers
       return !["admin", "equipment_manager"].includes(targetUser.role);
     }
     return false;
@@ -75,8 +60,6 @@ function UserList() {
         return "bg-blue-100 text-blue-700";
       case "equipment_assistant":
         return "bg-green-100 text-green-700";
-      case "student":
-        return "bg-gray-100 text-gray-700";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -87,14 +70,19 @@ function UserList() {
   }, []);
 
   useEffect(() => {
-    const filtered = users.filter(
-      (user) =>
-        user.student_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.firstname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.lastname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.branch?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        getRoleText(user.role).toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filtered = users.filter((user) => {
+      if (!searchQuery) return true;
+
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        (user.username || "").toLowerCase().includes(searchLower) ||
+        (user.firstname || "").toLowerCase().includes(searchLower) ||
+        (user.lastname || "").toLowerCase().includes(searchLower) ||
+        (user.branch || "").toLowerCase().includes(searchLower) ||
+        (getRoleText(user.role) || "").toLowerCase().includes(searchLower)
+      );
+    });
+
     setFilteredUsers(filtered);
   }, [searchQuery, users]);
 
@@ -121,11 +109,9 @@ function UserList() {
     try {
       setUpdating(userId);
       setError("");
-
       const response = await api.patch(`/users/${userId}/role`, {
         role: newRole,
       });
-
       if (response.data.success) {
         await fetchUsers();
       }
@@ -144,16 +130,12 @@ function UserList() {
       return;
     }
 
-    if (!window.confirm(`ยืนยันการลบผู้ใช้ ${studentId}?`)) {
-      return;
-    }
+    if (!window.confirm(`ยืนยันการลบผู้ใช้ ${studentId}?`)) return;
 
     try {
       setDeleteLoading(userId);
       setError("");
-
       const response = await api.delete(`/users/${userId}`);
-
       if (response.data.success) {
         await fetchUsers();
       }
@@ -168,7 +150,7 @@ function UserList() {
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
+        <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
         <p className="mt-2 text-gray-600">กำลังโหลดข้อมูล...</p>
       </div>
     );
@@ -177,7 +159,6 @@ function UserList() {
   return (
     <div className="bg-white rounded-lg shadow-md">
       <div className="p-6">
-        {/* Search */}
         <div className="mb-6">
           <div className="max-w-md">
             <label
@@ -195,7 +176,7 @@ function UserList() {
                 id="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ค้นหาด้วยรหัสนักศึกษา, ชื่อ, นามสกุล, สาขา..."
+                placeholder="ค้นหาด้วยรหัสผู้ใช้, ชื่อ, นามสกุล, สาขา..."
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white 
                           placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               />
@@ -213,13 +194,12 @@ function UserList() {
           </div>
         )}
 
-        {/* Users Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  รหัสนักศึกษา
+                  รหัสผู้ใช้
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   ชื่อ-นามสกุล
@@ -239,7 +219,7 @@ function UserList() {
               {filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {user.student_id}
+                    {user.username}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {user.firstname} {user.lastname}
@@ -251,7 +231,6 @@ function UserList() {
                     <select
                       value={user.role}
                       onChange={(e) => {
-                        // Additional check before role change
                         if (
                           e.target.value === "equipment_manager" &&
                           currentUser.role !== "admin"
@@ -265,19 +244,16 @@ function UserList() {
                       }}
                       disabled={!canModifyRole(user) || updating === user.id}
                       className={`block w-40 py-1 px-2 border rounded-md text-sm font-medium
-    ${getRoleBadgeColor(
-      user.role
-    )} border-0 focus:ring-2 focus:ring-indigo-500`}
+                        ${getRoleBadgeColor(
+                          user.role
+                        )} border-0 focus:ring-2 focus:ring-indigo-500`}
                     >
-                      {/* Always show current role first */}
                       <option value={user.role}>
                         {ROLE_OPTIONS[user.role]}
                       </option>
-
-                      {/* Show available roles for modification if user can be modified */}
                       {canModifyRole(user) &&
                         Object.entries(getAvailableRoles(currentUser.role))
-                          .filter(([key]) => key !== user.role) // Don't show current role again
+                          .filter(([key]) => key !== user.role)
                           .map(([key, value]) => (
                             <option key={key} value={key}>
                               {value}
@@ -287,7 +263,7 @@ function UserList() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <button
-                      onClick={() => handleDelete(user.id, user.student_id)}
+                      onClick={() => handleDelete(user.id, user.username)}
                       disabled={
                         !canDeleteUser(user) || deleteLoading === user.id
                       }

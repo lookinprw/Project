@@ -8,6 +8,7 @@ function ProblemForm({ onClose }) {
   const [formData, setFormData] = useState({
     equipment_id: "",
     description: "",
+    problem_type: "hardware",
   });
   const [equipment, setEquipment] = useState([]);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
@@ -17,6 +18,39 @@ function ProblemForm({ onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredEquipment, setFilteredEquipment] = useState([]);
+  const [imageError, setImageError] = useState("");
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const PROBLEM_TYPES = [
+    {
+      value: "hardware",
+      label: "ปัญหาด้านฮาร์ดแวร์",
+      icon: "🔧",
+      examples: [
+        "เครื่องเปิดไม่ติด",
+        "หน้าจอไม่แสดงผล",
+        "เมาส์/คีย์บอร์ดใช้ไม่ได้",
+        "พัดลมทำงานเสียงดัง",
+      ],
+    },
+    {
+      value: "software",
+      label: "ปัญหาด้านซอฟแวร์",
+      icon: "💻",
+      examples: [
+        "Windows มีปัญหา",
+        "โปรแกรมไม่ทำงาน",
+        "ไวรัสคอมพิวเตอร์",
+        "อินเทอร์เน็ตไม่ทำงาน",
+      ],
+    },
+    {
+      value: "other",
+      label: "ปัญหาอื่นๆ",
+      icon: "❓",
+      examples: ["ปัญหาที่ไม่เกี่ยวกับฮาร์ดแวร์และซอฟแวร์"],
+    },
+  ];
 
   // Fixed filtering logic with proper null checks
   useEffect(() => {
@@ -94,21 +128,21 @@ function ProblemForm({ onClose }) {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
-      const fileError = validateFile(selectedFile);
-      if (fileError) {
-        setError(fileError);
+      const error = validateFile(selectedFile);
+      if (error) {
+        setImageError(error);
         setFile(null);
-        setPreview(null);
+        setPreviewUrl(null);
         return;
       }
 
       setFile(selectedFile);
       const reader = new FileReader();
-      reader.onload = () => {
-        setPreview(reader.result);
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
       };
       reader.readAsDataURL(selectedFile);
-      setError("");
+      setImageError("");
     }
   };
 
@@ -145,6 +179,7 @@ function ProblemForm({ onClose }) {
       const formDataToSend = new FormData();
       formDataToSend.append("equipment_id", formData.equipment_id);
       formDataToSend.append("description", formData.description);
+      formDataToSend.append("problem_type", formData.problem_type);
 
       if (file) {
         formDataToSend.append("image", file);
@@ -193,35 +228,70 @@ function ProblemForm({ onClose }) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Problem Type Selection - Primary Focus */}
+        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+          <h3 className="text-lg font-semibold mb-4">เลือกประเภทของปัญหา</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {PROBLEM_TYPES.map((type) => (
+              <div
+                key={type.value}
+                onClick={() =>
+                  setFormData({ ...formData, problem_type: type.value })
+                }
+                className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200
+                  ${
+                    formData.problem_type === type.value
+                      ? "border-indigo-500 bg-indigo-50"
+                      : "border-gray-200 hover:border-indigo-200"
+                  }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">{type.icon}</span>
+                  <span className="font-medium">{type.label}</span>
+                </div>
+                <div className="mt-2 text-sm text-gray-600">
+                  <ul className="list-disc list-inside space-y-1">
+                    {type.examples.map((example, index) => (
+                      <li key={index}>{example}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Equipment Selection */}
+        <div className="border-t pt-6">
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               ค้นหาครุภัณฑ์
             </label>
-            <div className="relative mt-1">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <SearchIcon className="h-5 w-5 text-gray-400" />
-              </div>
+            <div className="relative">
+              <SearchIcon
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={20}
+              />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาด้วยรหัส, ชื่อ หรือห้อง..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               เลือกครุภัณฑ์
             </label>
             <select
               name="equipment_id"
               value={formData.equipment_id}
               onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
             >
               <option value="">เลือกครุภัณฑ์</option>
@@ -231,121 +301,90 @@ function ProblemForm({ onClose }) {
                 </option>
               ))}
             </select>
-            {filteredEquipment.length === 0 && searchQuery && (
-              <p className="mt-1 text-sm text-gray-500">
-                ไม่พบครุภัณฑ์ที่ตรงกับการค้นหา
-              </p>
-            )}
-            <p className="mt-1 text-sm text-gray-500">
-              จำนวนครุภัณฑ์ที่พบ: {filteredEquipment.length} รายการ
-            </p>
-          </div>
-
-          {selectedEquipment && (
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="font-medium text-gray-700 mb-2">
-                รายละเอียดครุภัณฑ์
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">รหัสครุภัณฑ์</p>
-                  <p className="font-medium">
-                    {selectedEquipment.equipment_id}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">ชื่อ</p>
-                  <p className="font-medium">
-                    {selectedEquipment.equipment_name}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">ประเภท</p>
-                  <p className="font-medium">{selectedEquipment.type}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">ห้อง</p>
-                  <p className="font-medium">{selectedEquipment.room}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              รายละเอียดปัญหา
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows="4"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-              required
-              minLength={10}
-              placeholder="กรุณาระบุรายละเอียดของปัญหาที่พบ"
-            ></textarea>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              แนบรูปภาพ (ถ้ามี)
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-              <div className="space-y-1 text-center">
-                {preview ? (
-                  <div className="relative">
-                    <img
-                      src={preview}
-                      alt="Preview"
-                      className="mx-auto h-32 w-auto"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleRemoveFile}
-                      className="absolute top-0 right-0 -mr-2 -mt-2 bg-red-100 text-red-600 rounded-full p-1 hover:bg-red-200"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                        <span>อัพโหลดรูปภาพ</span>
-                        <input
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                        />
-                      </label>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      PNG, JPG ขนาดไม่เกิน 5MB
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
           </div>
         </div>
 
-        <div className="flex justify-end space-x-3 mt-6">
+        {/* Description - Optional */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            รายละเอียดเพิ่มเติม (ถ้ามี)
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows="3"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="อธิบายรายละเอียดเพิ่มเติมเกี่ยวกับปัญหาที่พบ..."
+          />
+        </div>
+
+        {/* Image Upload */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            แนบรูปภาพ (ถ้ามี)
+          </label>
+          <div className="mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+            <div className="flex flex-col items-center text-center">
+              {previewUrl ? (
+                <div className="relative">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="mx-auto h-32 w-auto rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFile(null);
+                      setPreviewUrl(null);
+                    }}
+                    className="absolute top-0 right-0 -mr-2 -mt-2 bg-red-100 text-red-600 rounded-full p-1 hover:bg-red-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                  <div className="flex flex-col items-center space-y-2">
+                    <label className="relative cursor-pointer rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                      <span>อัพโหลดรูปภาพ</span>
+                      <input
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                      />
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      PNG, JPG ขนาดไม่เกิน 5MB
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          {imageError && (
+            <p className="mt-2 text-sm text-red-600">{imageError}</p>
+          )}
+        </div>
+
+        {/* Submit Buttons */}
+        <div className="flex justify-end space-x-3 pt-6">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
           >
             ยกเลิก
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
           >
-            {isSubmitting ? "กำลังส่งข้อมูล..." : "ส่งข้อมูล"}
+            {isSubmitting ? "กำลังส่งข้อมูล..." : "แจ้งปัญหา"}
           </button>
         </div>
       </form>

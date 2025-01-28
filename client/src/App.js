@@ -12,6 +12,8 @@ import EquipmentPage from "./pages/EquipmentPage";
 import UsersPage from "./pages/UsersPage";
 import ProfilePage from "./pages/ProfilePage";
 import UnfixablePage from "./pages/UnfixablePage";
+import StatusPage from "./pages/StatusPage";
+import ComputerCenterPage from "./pages/ComputerCenterPage";
 
 function App() {
   // Add environment check on app startup
@@ -56,10 +58,28 @@ function App() {
           />
 
           <Route
+            path="/status"
+            element={
+              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                <StatusPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/unfixable"
             element={
               <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
                 <UnfixablePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/computer-center"
+            element={
+              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                <ComputerCenterPage />
               </ProtectedRoute>
             }
           />

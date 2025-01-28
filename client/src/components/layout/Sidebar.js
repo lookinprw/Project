@@ -1,4 +1,3 @@
-// src/components/layout/Sidebar.js
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -9,17 +8,17 @@ import {
   Users,
   AlertCircle,
   User,
-  MessageSquare,
   ChevronRight,
+  Settings,
+  Monitor,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import Logo from "../../assets/logo.png"; // Make sure to import the logo
+import Logo from "../../assets/logo.png";
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
-  const { user, logout } = useAuth(); // Changed from currentUser to user
+  const { user, logout } = useAuth();
   const location = useLocation();
 
-  // Use user instead of currentUser
   const isAdmin = ["admin", "equipment_manager"].includes(user?.role);
   const canManageEquip = ["admin", "equipment_manager"].includes(user?.role);
   const canViewUnfix = ["admin", "equipment_manager"].includes(user?.role);
@@ -50,11 +49,25 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       show: canManageEquip,
     },
     {
+      path: "/status",
+      icon: <Settings size={20} />,
+      text: "จัดการสถานะ",
+      show: ["admin", "equipment_manager"].includes(user?.role),
+    },
+    {
       path: "/unfixable",
       icon: <AlertCircle size={20} />,
       text: "รายการที่ไม่สามารถแก้ไขได้",
       show: canViewUnfix,
     },
+
+    {
+      path: "/computer-center",
+      icon: <Monitor size={20} />,
+      text: "รายการส่งซ่อมศูนย์คอม",
+      show: ["admin", "equipment_manager"].includes(user?.role),
+    },
+
     {
       path: "/users",
       icon: <Users size={20} />,
@@ -65,35 +78,25 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
   return (
     <div
-      className={`fixed left-0 top-0 bottom-0 
-        ${isOpen ? "w-64" : "w-20"} 
-        bg-gradient-to-b from-indigo-600 to-indigo-800 text-white transition-all duration-300 ease-in-out
-        shadow-xl z-50`}
+      className={`fixed left-0 top-0 bottom-0 flex flex-col
+   ${isOpen ? "w-64" : "w-20"} 
+   bg-gradient-to-b from-indigo-600 to-indigo-800 text-white transition-all duration-300 ease-in-out
+   shadow-xl z-50`}
     >
-      {/* Header with Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-indigo-500/30">
-        {isOpen ? (
-          <div className="flex items-center space-x-2">
-            <img src={Logo} alt="Logo" className="h-8 w-8 object-contain" />
-            <h2 className="font-bold text-xl">IT Support</h2>
-          </div>
-        ) : (
-          <span className="mx-auto">
-            <img src={Logo} alt="Logo" className="h-8 w-8 object-contain" />
-          </span>
-        )}
+        <div className={`${isOpen ? "block" : "hidden"}`}>
+          <h2 className="font-bold text-xl">IT - PRSA</h2>
+        </div>
         <button
           onClick={toggleSidebar}
-          className="p-2 hover:bg-indigo-700 rounded-lg transition-colors duration-200"
+          className={`p-2 hover:bg-indigo-700 rounded-lg transition-colors duration-200 ${
+            isOpen ? "" : "mx-auto"
+          }`}
         >
-          <Menu
-            size={20}
-            className="transform transition-transform duration-200"
-          />
+          <Menu size={20} />
         </button>
       </div>
 
-      {/* Navigation */}
       <nav className="px-3 py-4">
         {menuItems.map(
           (item, index) =>
@@ -130,7 +133,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         )}
       </nav>
 
-      {/* User Profile */}
       {isOpen && user && (
         <Link
           to="/profile"
@@ -151,18 +153,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                 <p className="text-xs text-indigo-200">
                   {getRoleText(user.role)}
                 </p>
-
-                {/* LINE Connection Status */}
-                <div className="mt-2 flex items-center text-xs">
-                  <MessageSquare size={14} className="mr-1" />
-                  {user.line_user_id ? (
-                    <span className="text-green-300">เชื่อมต่อ LINE แล้ว</span>
-                  ) : (
-                    <span className="text-yellow-300">
-                      ยังไม่ได้เชื่อมต่อ LINE
-                    </span>
-                  )}
-                </div>
               </div>
               <ChevronRight
                 size={16}
@@ -173,7 +163,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         </Link>
       )}
 
-      {/* Logout Button */}
       <div className="absolute bottom-0 left-0 right-0 p-4">
         <button
           onClick={logout}

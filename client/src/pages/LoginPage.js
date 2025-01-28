@@ -9,7 +9,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    student_id: "",
+    username: "",
     password: "",
   });
   const [error, setError] = useState("");
@@ -52,15 +52,9 @@ function LoginPage() {
           <img
             src={Logo}
             alt="Logo"
-            className="h-20 w-auto sm:h-24 md:h-28 lg:h-32 object-contain hover:scale-105 transition-transform duration-300"
+            className="h-32 w-auto sm:h-40 md:h-48 lg:h-56 object-contain hover:scale-105 transition-transform duration-300"
           />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          ระบบแจ้งปัญหาครุภัณฑ์
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          คณะวิทยาศาสตร์และเทคโนโลยี
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
@@ -77,24 +71,24 @@ function LoginPage() {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label
-                htmlFor="student_id"
+                htmlFor="username"
                 className="block text-sm font-medium text-gray-700"
               >
-                รหัสนักศึกษา
+                รหัสผู้ใช้
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  id="student_id"
-                  name="student_id"
+                  id="username"
+                  name="username"
                   type="text"
                   required
-                  value={formData.student_id}
+                  value={formData.username}
                   onChange={handleChange}
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
-                  placeholder="กรอกรหัสนักศึกษา"
+                  placeholder="กรอกรหัสผู้ใช้"
                 />
               </div>
             </div>

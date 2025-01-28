@@ -13,9 +13,10 @@ import api from "../utils/axios";
 import Logo from "../assets/logo.png";
 
 function RegisterPage() {
+  // State declarations stay at the top
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    student_id: "",
+    username: "",
     firstname: "",
     lastname: "",
     branch: "ITD",
@@ -29,14 +30,15 @@ function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Define validateForm at component level
   const validateForm = () => {
     const newErrors = {};
 
     // Validate student ID
-    if (!formData.student_id) {
-      newErrors.student_id = "กรุณากรอกรหัสนักศึกษา";
-    } else if (!/^\d{8}$/.test(formData.student_id)) {
-      newErrors.student_id = "รหัสนักศึกษาต้องเป็นตัวเลข 8 หลักเท่านั้น";
+    if (!formData.username) {
+      newErrors.username = "กรุณากรอกรหัสนักศึกษา";
+    } else if (formData.username.length !== 8) {
+      newErrors.username = "รหัสนักศึกษาต้องมี 8 หลัก";
     }
 
     // Validate other fields
@@ -62,6 +64,7 @@ function RegisterPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Define handleSubmit at component level
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -74,7 +77,7 @@ function RegisterPage() {
 
     try {
       const response = await api.post("/users/register", {
-        student_id: formData.student_id,
+        username: formData.username,
         firstname: formData.firstname,
         lastname: formData.lastname,
         branch: formData.branch,
@@ -101,27 +104,19 @@ function RegisterPage() {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const fieldName = e.target.name;
+    const value = e.target.value;
 
-    // Special handling for student_id to enforce digits only and max length
-    if (name === "student_id") {
-      const digits = value.replace(/\D/g, "").slice(0, 8);
-      setFormData((prev) => ({
-        ...prev,
-        [name]: digits,
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
-    }
+    // Remove this special handling for username
+    setFormData((prev) => ({
+      ...prev,
+      [fieldName]: value,
+    }));
 
-    // Clear error for the field being changed
-    if (fieldErrors[name]) {
+    if (fieldErrors[fieldName]) {
       setFieldErrors((prev) => ({
         ...prev,
-        [name]: "",
+        [fieldName]: "",
       }));
     }
   };
@@ -139,9 +134,6 @@ function RegisterPage() {
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           ลงทะเบียนใช้งานระบบ
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          คณะวิทยาศาสตร์และเทคโนโลยี
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
@@ -159,36 +151,31 @@ function RegisterPage() {
             {/* Student ID Input */}
             <div>
               <label
-                htmlFor="student_id"
+                htmlFor="username"
                 className="block text-sm font-medium text-gray-700"
               >
-                รหัสนักศึกษา
+                รหัสผู้ใช้
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  id="student_id"
-                  name="student_id"
+                  id="username"
+                  name="username"
                   type="text"
-                  inputMode="numeric"
-                  pattern="\d*"
-                  maxLength="8"
                   required
-                  value={formData.student_id}
+                  value={formData.username}
                   onChange={handleChange}
                   className={`block w-full pl-10 pr-3 py-2 border ${
-                    fieldErrors.student_id
-                      ? "border-red-500"
-                      : "border-gray-300"
+                    fieldErrors.username ? "border-red-500" : "border-gray-300"
                   } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200`}
-                  placeholder="กรอกรหัสนักศึกษา 8 หลัก"
+                  placeholder="กรอกรหัสผู้ใช้งาน"
                 />
               </div>
-              {fieldErrors.student_id && (
+              {fieldErrors.username && (
                 <p className="mt-1 text-sm text-red-600">
-                  {fieldErrors.student_id}
+                  {fieldErrors.username}
                 </p>
               )}
             </div>
@@ -268,7 +255,7 @@ function RegisterPage() {
                 htmlFor="branch"
                 className="block text-sm font-medium text-gray-700"
               >
-                สาขา
+                หลักสูตร
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

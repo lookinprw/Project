@@ -5,11 +5,9 @@ require("dotenv").config();
 
 const app = express();
 
-// Enhanced debug logging
 console.log("\n=== SERVER STARTUP DEBUG INFO ===");
 console.log("Current Directory:", __dirname);
-console.log("\nEnvironment Variables:");
-console.log({
+console.log("\nEnvironment Variables:", {
   NODE_ENV: process.env.NODE_ENV,
   PORT: process.env.PORT,
   JWT_SECRET: process.env.JWT_SECRET ? "Set" : "Not Set",
@@ -17,7 +15,6 @@ console.log({
   FRONTEND_URL: process.env.FRONTEND_URL,
 });
 
-// CORS configuration with debug logging
 const corsOptions = {
   origin: [process.env.FRONTEND_URL, "http://localhost:3000", /\.vercel\.app$/],
   credentials: true,
@@ -25,31 +22,10 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
-console.log("\nCORS Configuration:", corsOptions);
-
 app.use(cors(corsOptions));
-
-// Add request logging middleware
-app.use((req, res, next) => {
-  console.log(`\n${new Date().toISOString()} - ${req.method} ${req.path}`);
-  console.log("Headers:", req.headers);
-  next();
-});
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Special LINE webhook handling
-app.use(
-  "/api/line/webhook",
-  express.json({
-    verify: (req, res, buf) => {
-      req.rawBody = buf;
-    },
-  })
-);
-
-// Health check route with detailed response
 app.get("/", (req, res) => {
   res.json({
     status: "Server is running",
@@ -59,12 +35,10 @@ app.get("/", (req, res) => {
       users: "/api/users",
       equipment: "/api/equipment",
       problems: "/api/problems",
-      line: "/api/line",
     },
   });
 });
 
-// Load routes with error handling
 const loadRoute = (path, router) => {
   try {
     app.use(`/api/${path}`, require(`./routes/${router}`));
@@ -77,9 +51,8 @@ const loadRoute = (path, router) => {
 loadRoute("users", "users.routes");
 loadRoute("equipment", "equipment.routes");
 loadRoute("problems", "problem.routes");
-loadRoute("line", "line.webhook");
+loadRoute("status", "status.routes");
 
-// Handle 404 for API routes
 app.use("/api/*", (req, res) => {
   console.log("404 - Route not found:", req.originalUrl);
   res.status(404).json({
@@ -89,18 +62,14 @@ app.use("/api/*", (req, res) => {
   });
 });
 
-// Production static file serving
 if (process.env.NODE_ENV === "production") {
   const buildPath = path.join(__dirname, "build");
-  console.log("\nServing static files from:", buildPath);
   app.use(express.static(buildPath));
-
   app.get("*", function (req, res) {
     res.sendFile(path.join(buildPath, "index.html"));
   });
 }
 
-// Enhanced error handling middleware
 app.use((err, req, res, next) => {
   console.error("\nError occurred:", {
     message: err.message,
@@ -117,7 +86,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Server startup with retry logic
 const PORT = process.env.PORT || 5000;
 const MAX_RETRIES = 3;
 let retryCount = 0;
@@ -132,19 +100,12 @@ const startServer = () => {
     });
 
     server.on("error", (error) => {
-      console.error("\nServer error:", error);
-
       if (error.code === "EADDRINUSE") {
-        console.log(`Port ${PORT} is in use`);
         if (retryCount < MAX_RETRIES) {
           retryCount++;
-          console.log(`Retrying with port ${PORT + retryCount}...`);
           process.env.PORT = PORT + retryCount;
           startServer();
         } else {
-          console.error(
-            "Max retries reached. Please free up the port or specify a different one."
-          );
           process.exit(1);
         }
       } else {
@@ -159,5 +120,4 @@ const startServer = () => {
 };
 
 startServer();
-
 module.exports = app;

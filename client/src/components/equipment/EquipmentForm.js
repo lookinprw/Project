@@ -3,9 +3,7 @@ import api from "../../utils/axios";
 
 // Constants for dropdowns
 const TYPE_OPTIONS = {
-  Office: "Office",
   Computer: "Computer",
-  Advertising: "Advertising",
   Other: "Other",
 };
 
