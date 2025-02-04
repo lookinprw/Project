@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "react-color": "^2.19.3",
+    "recharts": "^2.15.1"
+  }
+}

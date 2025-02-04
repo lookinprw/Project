@@ -3,12 +3,18 @@ import axios from "axios";
 
 class AuthAPI {
   constructor() {
+    const baseURL = process.env.REACT_APP_API_URL || "http://localhost:3001/api";
+    console.log('API baseURL:', baseURL);
+
     this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || "http://localhost:5000/api",
+      baseURL,
       headers: {
         "Content-Type": "application/json",
       },
+      withCredentials: true,
+      crossDomain: true
     });
+  
 
     this.isRefreshing = false;
     this.failedQueue = [];

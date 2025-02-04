@@ -6,12 +6,24 @@ const router = express.Router();
 const db = require("../config/db.config");
 const multer = require("multer");
 const { auth, checkRole } = require("../middleware/auth");
+const uploadDir = path.join(__dirname, '../uploads');
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    // Format: DATE_EQUIPMENTID_TYPE.extension
+    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+    const equipmentId = req.body.equipment_id || 'unknown';
+    const problemType = req.body.problem_type || 'unknown';
+    
+    const filename = `${date}_${time}_${equipmentId}_${problemType}${path.extname(file.originalname)}`;
+    cb(null, filename);
   },
 });
 
@@ -84,8 +96,12 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
     );
 
     const [defaultStatus] = await connection.execute(
-      "SELECT id FROM status WHERE name = 'pending' LIMIT 1"
+      "SELECT id FROM status WHERE name = 'รอดำเนินการ' LIMIT 1"
     );
+
+    if (!defaultStatus[0]) {
+      throw new Error("ไม่พบสถานะเริ่มต้น");
+    }
 
     const [result] = await connection.execute(
       `INSERT INTO problems (
@@ -100,10 +116,10 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       [
         equipment_id,
         description,
-        defaultStatus[0]?.id,
+        defaultStatus[0].id,
         req.file?.filename || null,
         reported_by,
-        equipment[0]?.room,
+        equipment[0]?.room || null,
         problem_type,
       ]
     );
@@ -438,5 +454,90 @@ router.get(
     }
   }
 );
+
+
+// Get similar problems route
+router.get("/similar/:equipmentId/:problemType", auth, async (req, res) => {
+  const { equipmentId, problemType } = req.params;
+
+  if (!equipmentId || !problemType) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing required parameters"
+    });
+  }
+
+  try {
+    // Get status IDs for Thai names
+    const [statuses] = await db.execute(`
+      SELECT id FROM status 
+      WHERE name IN ('รอดำเนินการ', 'กำลังดำเนินการ', 'กำลังส่งซ่อมศูนย์คอม')
+    `);
+    
+    const statusIds = statuses.map(s => s.id);
+
+    if (statusIds.length === 0) {
+      return res.json({ success: true, problems: [] });
+    }
+
+    const [problems] = await db.execute(`
+      SELECT p.*, s.name as status_name, s.color as status_color,
+             e.name as equipment_name,
+             u.firstname, u.lastname
+      FROM problems p
+      JOIN status s ON p.status_id = s.id
+      JOIN equipment e ON p.equipment_id = e.equipment_id
+      JOIN users u ON p.reported_by = u.id
+      WHERE p.equipment_id = ? 
+      AND p.problem_type = ?
+      AND p.status_id IN (${statusIds.join(',')})
+      AND p.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+    `, [equipmentId, problemType]);
+
+    res.json({ success: true, problems: problems || [] });
+  } catch (error) {
+    console.error("Error fetching similar problems:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "เกิดข้อผิดพลาดในการตรวจสอบปัญหาที่คล้ายกัน"
+    });
+  }
+});
+
+// When user wants to join existing problem, just show them reporter's name
+router.post("/:id/join", auth, async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get problem and reporter info
+    const [problem] = await connection.execute(
+      `
+      SELECT p.*, u.firstname, u.lastname 
+      FROM problems p
+      JOIN users u ON p.reported_by = u.id
+      WHERE p.id = ?
+    `,
+      [req.params.id]
+    );
+
+    if (!problem[0]) {
+      throw new Error("ไม่พบรายการแจ้งปัญหา");
+    }
+
+    // Instead of joining, show who reported
+    res.json({
+      success: true,
+      message: `ปัญหานี้ถูกแจ้งโดย ${problem[0].firstname} ${problem[0].lastname} แล้ว`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาด",
+    });
+  } finally {
+    connection.release();
+  }
+});
 
 module.exports = router;

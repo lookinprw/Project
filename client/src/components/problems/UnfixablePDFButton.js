@@ -14,20 +14,32 @@ function UnfixablePDFButton() {
         responseType: "blob",
       });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Create blob and URL
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create and configure link
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute(
-        "download",
-        `รายการครุภัณฑ์ที่ไม่สามารถซ่อมได้_${new Date().toLocaleDateString(
-          "th-TH"
-        )}.pdf`
-      );
+      link.download = `รายการครุภัณฑ์ที่ไม่สามารถซ่อมได้_${new Date().toLocaleDateString("th-TH")}.pdf`;
+      
+      // Add to document (required for Safari)
       document.body.appendChild(link);
+      
+      // Trigger download
       link.click();
-      window.location.reload();
+      
+      // Clean up
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        
+        // Reload page after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      }, 100);
 
-      link.remove();
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -36,6 +48,7 @@ function UnfixablePDFButton() {
     }
   };
 
+  // Rest of your component remains the same
   return (
     <>
       <button

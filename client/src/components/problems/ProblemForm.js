@@ -20,6 +20,8 @@ function ProblemForm({ onClose }) {
   const [filteredEquipment, setFilteredEquipment] = useState([]);
   const [imageError, setImageError] = useState("");
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [similarProblems, setSimilarProblems] = useState([]);
+  const [showSimilarProblems, setShowSimilarProblems] = useState(false);
 
   const PROBLEM_TYPES = [
     {
@@ -146,6 +148,21 @@ function ProblemForm({ onClose }) {
     }
   };
 
+  const checkSimilarProblems = async (equipment_id, problem_type) => {
+    try {
+      const response = await api.get(`/problems/similar/${equipment_id}/${problem_type}`);
+      if (response.data.problems?.length > 0) {
+        setSimilarProblems(response.data.problems);
+        setShowSimilarProblems(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking similar problems:", error);
+      return false;
+    }
+  };
+
   const validateForm = () => {
     if (!formData.equipment_id) {
       setError("กรุณาเลือกครุภัณฑ์");
@@ -171,6 +188,11 @@ function ProblemForm({ onClose }) {
     if (!validateForm()) {
       return;
     }
+    const hasSimilar = await checkSimilarProblems(
+      formData.equipment_id,
+      formData.problem_type
+    );
+    if (hasSimilar) return;
 
     setIsSubmitting(true);
     setError("");
@@ -218,8 +240,81 @@ function ProblemForm({ onClose }) {
     setPreview(null);
   };
 
+  const SimilarProblemsModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+        <h3 className="text-lg font-semibold mb-4">พบปัญหาที่คล้ายกัน</h3>
+        <div className="space-y-4">
+          {similarProblems.map((problem) => (
+            <div key={problem.id} className="border rounded-lg p-4">
+              <p className="font-medium">{problem.equipment_name}</p>
+              <p className="text-sm text-gray-600 mb-2">
+                {problem.description}
+              </p>
+              <p className="text-sm text-gray-500">
+                แจ้งโดย: {problem.firstname} {problem.lastname}
+              </p>
+              <div className="mt-2">
+                <span
+                  className="px-2 py-1 text-xs rounded-full"
+                  style={{ backgroundColor: problem.status_color }}
+                >
+                  {problem.status_name}
+                </span>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end space-x-3 mt-4">
+            <button
+              onClick={() => setShowSimilarProblems(false)}
+              className="px-4 py-2 text-gray-700 border rounded-md"
+            >
+              ยกเลิก
+            </button>
+            <button
+              onClick={async () => {
+                setShowSimilarProblems(false);
+                const formDataToSend = new FormData();
+                formDataToSend.append("equipment_id", formData.equipment_id);
+                formDataToSend.append("description", formData.description);
+                formDataToSend.append("problem_type", formData.problem_type);
+  
+                if (file) {
+                  formDataToSend.append("image", file);
+                }
+  
+                setIsSubmitting(true);
+                try {
+                  const response = await api.post("/problems", formDataToSend, {
+                    headers: {
+                      "Content-Type": "multipart/form-data",
+                    },
+                  });
+  
+                  if (response.data.success) {
+                    onClose();
+                  }
+                } catch (error) {
+                  setError(
+                    error.response?.data?.message || "เกิดข้อผิดพลาดในการส่งข้อมูล"
+                  );
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+            >
+              แจ้งปัญหาใหม่
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      {showSimilarProblems && <SimilarProblemsModal />}
       <h2 className="text-xl font-bold mb-6">แจ้งปัญหาครุภัณฑ์</h2>
 
       {error && (

@@ -49,54 +49,84 @@ function ProblemList() {
   return (
     <div className="bg-white rounded-lg shadow-md">
       <div className="p-6">
+        // In your ProblemList component
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th>อุปกรณ์</th>
-              <th>รหัสครุภัณฑ์</th>
-              <th>ห้อง</th>
-              <th>ปัญหา</th>
-              <th>สถานะ</th>
-              <th>จัดการ</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ลำดับ
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                วันที่
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                อุปกรณ์
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                รหัสครุภัณฑ์
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ห้อง
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ปัญหา
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ประเภทปัญหา
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ผู้แจ้ง
+              </th>
+              {(user?.role === "admin" ||
+                user?.role === "equipment_manager" ||
+                user?.role === "equipment_assistant") && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  จัดการ
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {problems.map((problem) => {
-              const status = getStatusDetails(problem.status_id);
-              return (
-                <tr key={problem.id}>
-                  <td>{problem.equipment_name}</td>
-                  <td>{problem.equipment_id}</td>
-                  <td>{problem.room}</td>
-                  <td>{problem.description}</td>
-                  <td>
-                    <select
-                      value={problem.status_id}
-                      onChange={(e) =>
-                        handleStatusChange(problem.id, e.target.value)
-                      }
-                      style={{ backgroundColor: status.color }}
-                      className="rounded px-2 py-1 text-white"
-                    >
-                      {statuses.map((status) => (
-                        <option
-                          key={status.id}
-                          value={status.id}
-                          style={{ backgroundColor: status.color }}
-                        >
-                          {status.name}
-                        </option>
-                      ))}
-                    </select>
+            {problems.map((problem, index) => (
+              <tr key={problem.id}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {index + 1}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {new Date(problem.created_at).toLocaleDateString("th-TH")}
+                </td>
+                {/* ... other columns ... */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {problem.equipment_name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {problem.equipment_id}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {problem.room}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {problem.description}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {problem.problem_type}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {problem.reporter_name}
+                </td>
+                {(user?.role === "admin" ||
+                  user?.role === "equipment_manager" ||
+                  user?.role === "equipment_assistant") && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
+                    <StatusSelect
+                      problem={problem}
+                      statuses={statuses}
+                      onStatusChange={handleStatusChange}
+                    />
                   </td>
-                  <td>
-                    <div className="flex items-center space-x-2">
-                      {/* Add edit/delete buttons if needed */}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

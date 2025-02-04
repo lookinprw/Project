@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const app = express();
 
+
 console.log("\n=== SERVER STARTUP DEBUG INFO ===");
 console.log("Current Directory:", __dirname);
 console.log("\nEnvironment Variables:", {
@@ -89,33 +90,30 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const MAX_RETRIES = 3;
 let retryCount = 0;
-
-const startServer = () => {
+startServer = () => {
   try {
     const server = app.listen(PORT, () => {
       console.log("\n=== SERVER STARTED SUCCESSFULLY ===");
       console.log(`Server running on port ${PORT}`);
-      console.log(`Mode: ${process.env.NODE_ENV || "development"}`);
-      console.log(`API URL: http://localhost:${PORT}/api`);
     });
 
-    server.on("error", (error) => {
-      if (error.code === "EADDRINUSE") {
-        if (retryCount < MAX_RETRIES) {
-          retryCount++;
-          process.env.PORT = PORT + retryCount;
-          startServer();
-        } else {
-          process.exit(1);
-        }
-      } else {
-        console.error("Unhandled server error:", error);
-        process.exit(1);
+    // Add detailed error handling
+    server.on('error', (error) => {
+      console.error('Server Error Details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
       }
     });
+
   } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
+    console.error('Startup Error Details:', {
+      message: error.message,
+      stack: error.stack
+    });
   }
 };
 

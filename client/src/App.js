@@ -14,6 +14,7 @@ import ProfilePage from "./pages/ProfilePage";
 import UnfixablePage from "./pages/UnfixablePage";
 import StatusPage from "./pages/StatusPage";
 import ComputerCenterPage from "./pages/ComputerCenterPage";
+import ProblemAnalyticsPage from "./pages/ProblemAnalyticsPage";
 
 function App() {
   // Add environment check on app startup
@@ -38,6 +39,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/problem-analytics"
+            element={
+              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                <ProblemAnalyticsPage />
               </ProtectedRoute>
             }
           />

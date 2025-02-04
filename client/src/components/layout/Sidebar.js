@@ -1,34 +1,23 @@
 import React from "react";
+import { MessageCircle, Wrench, Settings, Monitor, AlertCircle, Users, LogOut, User, ChevronRight, Menu, BarChart2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import {
-  Menu,
-  LogOut,
-  MessageCircle,
-  Wrench,
-  Users,
-  AlertCircle,
-  User,
-  ChevronRight,
-  Settings,
-  Monitor,
-} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import Logo from "../../assets/logo.png";
+
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
 
-  const isAdmin = ["admin", "equipment_manager"].includes(user?.role);
-  const canManageEquip = ["admin", "equipment_manager"].includes(user?.role);
-  const canViewUnfix = ["admin", "equipment_manager"].includes(user?.role);
+  const role = user?.role;
+  const isAdmin = role === "admin";
+  const isEquipManager = role === "equipment_manager";
 
   const isActivePath = (path) => location.pathname === path;
 
   const getRoleText = (role) => {
     const roleLabels = {
       admin: "ผู้ดูแลระบบ",
-      student: "นักศึกษา",
+      reporter: "ผู้แจ้งปัญหา",
       equipment_manager: "ผู้จัดการครุภัณฑ์",
       equipment_assistant: "ผู้ช่วยดูแลครุภัณฑ์",
     };
@@ -36,44 +25,53 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   };
 
   const menuItems = [
+    // Admin only sees Users Management
+    {
+      path: "/users",
+      icon: <Users size={20} />,
+      text: "จัดการผู้ใช้",
+      show: isAdmin
+    },
+    
+    // Equipment Manager Menu Items
     {
       path: "/dashboard",
       icon: <MessageCircle size={20} />,
       text: "แจ้งปัญหา",
-      show: true,
+      show: !isAdmin
     },
+
+    {
+      path: "/problem-analytics",
+      icon: <BarChart2 size={20} />,
+      text: "รายงานการวิเคราะห์ปัญหา",
+      show: isEquipManager
+    },
+
     {
       path: "/equipment",
       icon: <Wrench size={20} />,
       text: "จัดการครุภัณฑ์",
-      show: canManageEquip,
+      show: isEquipManager
     },
     {
       path: "/status",
       icon: <Settings size={20} />,
       text: "จัดการสถานะ",
-      show: ["admin", "equipment_manager"].includes(user?.role),
+      show: isEquipManager
+    },
+    {
+      path: "/computer-center",
+      icon: <Monitor size={20} />,
+      text: "ปรับสถานะรายการที่ส่งซ่อม",
+      show: isEquipManager
     },
     {
       path: "/unfixable",
       icon: <AlertCircle size={20} />,
-      text: "รายการที่ไม่สามารถแก้ไขได้",
-      show: canViewUnfix,
-    },
-
-    {
-      path: "/computer-center",
-      icon: <Monitor size={20} />,
-      text: "รายการส่งซ่อมศูนย์คอม",
-      show: ["admin", "equipment_manager"].includes(user?.role),
-    },
-
-    {
-      path: "/users",
-      icon: <Users size={20} />,
-      text: "จัดการผู้ใช้",
-      show: isAdmin,
-    },
+      text: "รายงานที่ไม่สามารถแก้ไขได้",
+      show: isEquipManager
+    }
   ];
 
   return (

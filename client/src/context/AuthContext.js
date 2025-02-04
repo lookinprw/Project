@@ -103,22 +103,28 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       const response = await api.post("/users/login", credentials);
-
+  
       if (response.data.success) {
         const userData = {
           ...response.data.user,
           token: response.data.token,
           refreshToken: response.data.refreshToken,
         };
-
-        api.defaults.headers.common[
-          "Authorization"
-        ] = `Bearer ${userData.token}`;
+  
+        api.defaults.headers.common["Authorization"] = `Bearer ${userData.token}`;
         localStorage.setItem("user", JSON.stringify(userData));
         setUser(userData);
+  
+        // Add role-based redirect
+        if (userData.role === "admin") {
+          window.location.href = "/users";  // Use same style as logout redirect
+        } else {
+          window.location.href = "/dashboard";
+        }
+  
         return { success: true };
       }
-
+  
       return { success: false, error: response.data.message };
     } catch (error) {
       return {
