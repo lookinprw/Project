@@ -6,7 +6,7 @@ const router = express.Router();
 const db = require("../config/db.config");
 const multer = require("multer");
 const { auth, checkRole } = require("../middleware/auth");
-const uploadDir = path.join(__dirname, '../uploads');
+const uploadDir = path.join(__dirname, "../uploads");
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -17,12 +17,14 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     // Format: DATE_EQUIPMENTID_TYPE.extension
-    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
-    const equipmentId = req.body.equipment_id || 'unknown';
-    const problemType = req.body.problem_type || 'unknown';
-    
-    const filename = `${date}_${time}_${equipmentId}_${problemType}${path.extname(file.originalname)}`;
+    const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const time = new Date().toTimeString().split(" ")[0].replace(/:/g, "-"); // HH-MM-SS
+    const equipmentId = req.body.equipment_id || "unknown";
+    const problemType = req.body.problem_type || "unknown";
+
+    const filename = `${date}_${time}_${equipmentId}_${problemType}${path.extname(
+      file.originalname
+    )}`;
     cb(null, filename);
   },
 });
@@ -62,11 +64,11 @@ router.get("/", auth, async (req, res) => {
       LEFT JOIN users u ON p.reported_by = u.id
       LEFT JOIN users a ON p.assigned_to = a.id
       LEFT JOIN status s ON p.status_id = s.id
-      WHERE ${req.user.role === "student" ? "p.reported_by = ?" : "1=1"}
+      WHERE ${req.user.role === "reporter" ? "p.reported_by = ?" : "1=1"}
       ORDER BY p.created_at DESC
     `;
 
-    const params = req.user.role === "student" ? [req.user.id] : [];
+    const params = req.user.role === "reporter" ? [req.user.id] : [];
     const [problems] = await db.execute(query, params);
     res.json({ success: true, data: problems });
   } catch (error) {
@@ -83,6 +85,11 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
     const { equipment_id, description, problem_type } = req.body;
     const reported_by = req.user.id;
 
+    // Validate length
+    if (description.length < 5) {
+      throw new Error("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
+    }
+
     // Validate problem_type
     const validTypes = ["hardware", "software", "other"];
     if (!validTypes.includes(problem_type)) {
@@ -95,8 +102,9 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       [equipment_id]
     );
 
+    // Get default status (id = 1 for รอดำเนินการ)
     const [defaultStatus] = await connection.execute(
-      "SELECT id FROM status WHERE name = 'รอดำเนินการ' LIMIT 1"
+      "SELECT id FROM status WHERE id = 1 LIMIT 1"
     );
 
     if (!defaultStatus[0]) {
@@ -137,43 +145,45 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
   }
 });
 
-// Update problem status
-router.patch(
-  "/:id/status",
+router.delete(
+  "/:id",
   auth,
-  checkRole(["admin", "equipment_manager", "equipment_assistant"]),
+  checkRole(["admin", "equipment_manager"]),
   async (req, res) => {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
-      const { id } = req.params;
-      const { status_id, comment } = req.body;
 
-      const [status] = await connection.execute(
-        "SELECT id FROM status WHERE id = ?",
-        [status_id]
+      // First check if problem exists
+      const [problem] = await connection.execute(
+        "SELECT * FROM problems WHERE id = ?",
+        [req.params.id]
       );
 
-      if (status.length === 0) {
-        throw new Error("สถานะไม่ถูกต้อง");
+      if (problem.length === 0) {
+        throw new Error("ไม่พบรายการที่ต้องการลบ");
       }
 
-      await connection.execute(
-        `UPDATE problems SET 
-         status_id = ?, 
-         comment = ?,
-         updated_at = CURRENT_TIMESTAMP 
-         WHERE id = ?`,
-        [status_id, comment, id]
-      );
+      // Delete any associated images if they exist
+      if (problem[0].image_url) {
+        const imagePath = path.join(uploadDir, problem[0].image_url);
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+      }
+
+      // Delete the problem
+      await connection.execute("DELETE FROM problems WHERE id = ?", [
+        req.params.id,
+      ]);
 
       await connection.commit();
-      res.json({ success: true });
+      res.json({ success: true, message: "ลบรายการสำเร็จ" });
     } catch (error) {
       await connection.rollback();
       res.status(500).json({
         success: false,
-        message: error.message || "เกิดข้อผิดพลาดในการอัพเดทสถานะ",
+        message: error.message || "เกิดข้อผิดพลาดในการลบข้อมูล",
       });
     } finally {
       connection.release();
@@ -181,19 +191,91 @@ router.patch(
   }
 );
 
+// Update problem status
+router.patch("/:id/status", auth, async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { id } = req.params;
+    const { status_id, comment } = req.body;
+
+    // First get the problem and equipment details
+    const [problems] = await connection.execute(
+      "SELECT p.*, e.equipment_id FROM problems p LEFT JOIN equipment e ON p.equipment_id = e.equipment_id WHERE p.id = ?",
+      [id]
+    );
+
+    if (problems.length === 0) {
+      throw new Error("ไม่พบรายการที่ต้องการอัพเดท");
+    }
+
+    const problem = problems[0];
+
+    // Update equipment status based on problem status
+    let equipmentStatus;
+    switch (parseInt(status_id)) {
+      case 1: // รอดำเนินการ
+      case 2: // กำลังดำเนินการ
+      case 7: // กำลังส่งไปศูนย์คอม
+        equipmentStatus = "maintenance";
+        break;
+      case 4: // ไม่สามารถแก้ไขได้
+      case 8: // ชำรุดเสียหาย
+        equipmentStatus = "inactive";
+        break;
+      case 3: // เสร็จสิ้น
+        equipmentStatus = "active";
+        break;
+    }
+
+    // Update equipment status if needed
+    if (equipmentStatus && problem.equipment_id) {
+      await connection.execute(
+        "UPDATE equipment SET status = ? WHERE equipment_id = ?",
+        [equipmentStatus, problem.equipment_id]
+      );
+    }
+
+    // Update problem status
+    await connection.execute(
+      `UPDATE problems SET 
+       status_id = ?, 
+       comment = ?,
+       updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [status_id, comment, id]
+    );
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการอัพเดทสถานะ",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 // Accept problem
 router.patch("/:id/assign", auth, async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
+
+    const inProgressStatusId = 2; // In Progress status
+
     await connection.execute(
       `UPDATE problems SET 
        assigned_to = ?,
-       status_id = (SELECT id FROM status WHERE name = 'in_progress'),
+       status_id = ?,
        updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [req.user.id, req.params.id]
+      [req.user.id, inProgressStatusId, req.params.id]
     );
+
     await connection.commit();
     res.json({ success: true });
   } catch (error) {
@@ -224,7 +306,7 @@ router.get(
       LEFT JOIN users r ON p.reported_by = r.id
       LEFT JOIN users a ON p.assigned_to = a.id
       LEFT JOIN status s ON p.status_id = s.id
-      WHERE s.name = 'cannot_fix'
+      WHERE s.name = 'ไม่สามารถแก้ไขได้'
       ORDER BY p.updated_at DESC
     `;
 
@@ -250,37 +332,31 @@ router.get(
     try {
       await connection.beginTransaction();
 
+      // Get problems with status_id = 4 (Cannot Fix)
       const [problems] = await connection.execute(`
-        SELECT p.*, 
-               e.name as equipment_name,
-               e.room as equipment_room,
-               s.name as status_name,
-               CONCAT(r.firstname, ' ', r.lastname) as reporter_name,
-               CONCAT(a.firstname, ' ', a.lastname) as assigned_to_name
-        FROM problems p
-        LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
-        LEFT JOIN users r ON p.reported_by = r.id
-        LEFT JOIN users a ON p.assigned_to = a.id
-        LEFT JOIN status s ON p.status_id = s.id
-        WHERE s.name = 'cannot_fix'
-        ORDER BY p.updated_at DESC
-       `);
+      SELECT p.*, 
+             e.name as equipment_name,
+             e.room as equipment_room,
+             s.name as status_name,
+             s.color as status_color,
+             CONCAT(r.firstname, ' ', r.lastname) as reporter_name,
+             CONCAT(a.firstname, ' ', a.lastname) as assigned_to_name
+      FROM problems p
+      LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN users r ON p.reported_by = r.id
+      LEFT JOIN users a ON p.assigned_to = a.id
+      LEFT JOIN status s ON p.status_id = s.id
+      WHERE p.status_id = 4
+      ORDER BY p.updated_at DESC
+    `);
 
-      const [ccStatus] = await connection.execute(
-        "SELECT id FROM status WHERE name = 'referred_to_cc' LIMIT 1"
-      );
-      const ccStatusId = ccStatus[0]?.id;
-
+      // Update problems to Computer Center status (ID: 7)
       await connection.execute(
-        `
-        UPDATE problems p
-        INNER JOIN status s ON p.status_id = s.id
-        SET p.status_id = ?, p.comment = 'ส่งซ่อมที่ศูนย์คอมพิวเตอร์'
-        WHERE s.name = 'cannot_fix'
-      `,
-        [ccStatusId]
+        `UPDATE problems SET status_id = 7, comment = 'ส่งซ่อมที่ศูนย์คอมพิวเตอร์'
+       WHERE status_id = 4`
       );
 
+      // Generate PDF
       const doc = new PDFDocument({
         size: "A4",
         margin: 50,
@@ -329,13 +405,14 @@ router.get(
       doc.fillColor("#000000");
 
       const columns = [
-        { x: 50, width: 90, title: "รหัสครุภัณฑ์" },
-        { x: 140, width: 100, title: "ชื่ออุปกรณ์" },
-        { x: 240, width: 60, title: "ห้อง" },
-        { x: 300, width: 80, title: "ปัญหา" },
-        { x: 380, width: 80, title: "เหตุผล" },
-        { x: 460, width: 45, title: "ผู้แจ้ง" },
-        { x: 505, width: 45, title: "ผู้รับผิดชอบ" },
+        { x: 50, width: 40, title: "ลำดับ" },
+        { x: 90, width: 90, title: "รหัสครุภัณฑ์" },
+        { x: 180, width: 90, title: "ชื่ออุปกรณ์" },
+        { x: 270, width: 50, title: "ห้อง" },
+        { x: 320, width: 80, title: "ปัญหา" },
+        { x: 400, width: 80, title: "เหตุผล" },
+        { x: 480, width: 35, title: "ผู้แจ้ง" },
+        { x: 515, width: 35, title: "ผู้รับผิดชอบ" },
       ];
 
       // Draw column headers
@@ -354,7 +431,7 @@ router.get(
       // Draw data rows
       let y = tableTop + rowHeight;
 
-      problems.forEach((problem) => {
+      problems.forEach((problem, index) => {
         if (y > 680) {
           doc.addPage();
           y = 50;
@@ -368,39 +445,44 @@ router.get(
           });
           y += rowHeight;
         }
-
+      
         doc.rect(tableLeft, y, tableRight - tableLeft, rowHeight).stroke();
 
         doc
           .fontSize(8)
-          .text(problem.equipment_id || "", columns[0].x + 2, y + 5, {
+          .text(String(index + 1), columns[0].x + 2, y + 5, {
             width: columns[0].width - 4,
+            align: "center",
             lineGap: 2,
           })
-          .text(problem.equipment_name || "", columns[1].x + 2, y + 5, {
+          .text(problem.equipment_id || "", columns[1].x + 2, y + 5, {
             width: columns[1].width - 4,
             lineGap: 2,
           })
-          .text(problem.equipment_room || "", columns[2].x + 2, y + 5, {
+          .text(problem.equipment_name || "", columns[2].x + 2, y + 5, {
             width: columns[2].width - 4,
+            lineGap: 2,
+          })
+          .text(problem.equipment_room || "", columns[3].x + 2, y + 5, {
+            width: columns[3].width - 4,
             align: "center",
             lineGap: 2,
           })
-          .text(problem.description || "", columns[3].x + 2, y + 5, {
-            width: columns[3].width - 4,
-            lineGap: 2,
-          })
-          .text(problem.comment || "", columns[4].x + 2, y + 5, {
+          .text(problem.description || "", columns[4].x + 2, y + 5, {
             width: columns[4].width - 4,
             lineGap: 2,
           })
-          .text(problem.reporter_name || "", columns[5].x + 2, y + 5, {
+          .text(problem.comment || "", columns[5].x + 2, y + 5, {
             width: columns[5].width - 4,
+            lineGap: 2,
+          })
+          .text(problem.reporter_name || "", columns[6].x + 2, y + 5, {
+            width: columns[6].width - 4,
             align: "center",
             lineGap: 2,
           })
-          .text(problem.assigned_to_name || "-", columns[6].x + 2, y + 5, {
-            width: columns[6].width - 4,
+          .text(problem.assigned_to_name || "-", columns[7].x + 2, y + 5, {
+            width: columns[7].width - 4,
             align: "center",
             lineGap: 2,
           });
@@ -455,32 +537,15 @@ router.get(
   }
 );
 
-
 // Get similar problems route
 router.get("/similar/:equipmentId/:problemType", auth, async (req, res) => {
   const { equipmentId, problemType } = req.params;
 
-  if (!equipmentId || !problemType) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing required parameters"
-    });
-  }
-
   try {
-    // Get status IDs for Thai names
-    const [statuses] = await db.execute(`
-      SELECT id FROM status 
-      WHERE name IN ('รอดำเนินการ', 'กำลังดำเนินการ', 'กำลังส่งซ่อมศูนย์คอม')
-    `);
-    
-    const statusIds = statuses.map(s => s.id);
+    const activeStatusIds = [1, 2, 7]; // รอดำเนินการ, กำลังดำเนินการ, กำลังส่งไปศูนย์คอม
 
-    if (statusIds.length === 0) {
-      return res.json({ success: true, problems: [] });
-    }
-
-    const [problems] = await db.execute(`
+    const [problems] = await db.execute(
+      `
       SELECT p.*, s.name as status_name, s.color as status_color,
              e.name as equipment_name,
              u.firstname, u.lastname
@@ -490,16 +555,17 @@ router.get("/similar/:equipmentId/:problemType", auth, async (req, res) => {
       JOIN users u ON p.reported_by = u.id
       WHERE p.equipment_id = ? 
       AND p.problem_type = ?
-      AND p.status_id IN (${statusIds.join(',')})
+      AND p.status_id IN (${activeStatusIds.join(",")})
       AND p.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-    `, [equipmentId, problemType]);
+    `,
+      [equipmentId, problemType]
+    );
 
-    res.json({ success: true, problems: problems || [] });
+    res.json({ success: true, problems });
   } catch (error) {
-    console.error("Error fetching similar problems:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "เกิดข้อผิดพลาดในการตรวจสอบปัญหาที่คล้ายกัน"
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการตรวจสอบปัญหาที่คล้ายกัน",
     });
   }
 });

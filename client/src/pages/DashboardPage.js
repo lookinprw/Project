@@ -21,15 +21,15 @@ function DashboardPage() {
   const tableHeaders = [
     "ลำดับ",
     "วันที่",
-    "อุปกรณ์",
     "รหัสครุภัณฑ์",
+    "อุปกรณ์",
     "ห้อง",
     "ปัญหา",
     "ประเภทปัญหา",
     "ผู้แจ้ง",
     "รับงาน",
     "ผู้รับผิดชอบ",
-    !isStaff ? "สถานะ" : "จัดการ",  // Show "สถานะ" for normal users, "จัดการ" for staff
+    !isStaff ? "สถานะ" : "จัดการ",
   ].filter(Boolean);
 
   const getProblemTypeDetails = (type) => {
@@ -61,19 +61,9 @@ function DashboardPage() {
     }
   };
 
-  useEffect(() => {
-    if (!currentUser) {
-      navigate("/login");
-      return;
-    }
-    fetchProblems();
-  }, [currentUser, navigate]);
-
   const fetchProblems = async () => {
     try {
       setLoading(true);
-      setError("");
-
       const [statusesRes, problemsRes] = await Promise.all([
         api.get("/status"),
         api.get("/problems"),
@@ -86,8 +76,8 @@ function DashboardPage() {
         if (currentUser?.role === "equipment_assistant") {
           filteredProblems = filteredProblems.filter(
             (problem) =>
-              problem.status_name === "pending" ||
-              (problem.status_name === "in_progress" && problem.assigned_to === currentUser.id) ||
+              problem.status_id === 1 || // รอดำเนินการ
+              (problem.status_id === 2 && problem.assigned_to === currentUser.id) || // กำลังดำเนินการ
               problem.reported_by === currentUser.id
           );
         }
@@ -95,12 +85,19 @@ function DashboardPage() {
         setProblems(filteredProblems);
       }
     } catch (err) {
-      console.error("Error fetching data:", err);
       setError(err.message || "ไม่สามารถดึงข้อมูลได้");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+    fetchProblems();
+  }, [currentUser, navigate]);
 
   const handleAssign = async (problemId) => {
     try {
@@ -113,24 +110,17 @@ function DashboardPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-screen bg-gray-50">
-          <div className="text-center">
-            <div className="inline-block animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
-            <p className="mt-4 text-lg text-gray-600">กำลังโหลดข้อมูล...</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   const renderStatusColumn = (problem) => {
     if (isStaff) {
       return (
         <StatusSelect
-          problem={problem}
+          problem={{
+            id: problem.id,
+            status_id: problem.status_id,
+            status_color: problem.status_color,
+            status_name: problem.status_name,
+            equipment_id: problem.equipment_id
+          }}
           statuses={statuses}
           onStatusChange={fetchProblems}
         />
@@ -149,13 +139,26 @@ function DashboardPage() {
     );
   };
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen bg-gray-50">
+          <div className="text-center">
+            <div className="inline-block animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
+            <p className="mt-4 text-lg text-gray-600">กำลังโหลดข้อมูล...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50/50 p-6">
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">ระบบแจ้งปัญหาครุภัณฑ์</h1>
+              <h1 className="text-2xl font-bold text-gray-900">ระบบแจ้งปัญหาครุภัณฑ์คอมพิวเตอร์</h1>
               <p className="mt-1 text-sm text-gray-500">
                 จัดการและติดตามการแจ้งปัญหาครุภัณฑ์ทั้งหมด
               </p>
@@ -236,10 +239,10 @@ function DashboardPage() {
                           {new Date(problem.created_at).toLocaleDateString('th-TH')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {problem.equipment_name || "N/A"}
+                          {problem.equipment_id || "N/A"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {problem.equipment_id || "N/A"}
+                          {problem.equipment_name || "N/A"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {problem.room || "N/A"}
@@ -262,7 +265,7 @@ function DashboardPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {problem.status_name === "pending" && isStaff ? (
+                          {problem.status_id === 1 && isStaff ? (
                             <button
                               onClick={() => handleAssign(problem.id)}
                               className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
@@ -271,7 +274,7 @@ function DashboardPage() {
                             </button>
                           ) : (
                             <span className="text-sm text-gray-500">
-                              {problem.status_name === "pending" ? "รอรับเรื่อง" : "รับเรื่องแล้ว"}
+                              {problem.status_id === 1 ? "รอรับเรื่อง" : "รับเรื่องแล้ว"}
                             </span>
                           )}
                         </td>

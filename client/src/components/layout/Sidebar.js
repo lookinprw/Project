@@ -40,32 +40,35 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       text: "แจ้งปัญหา",
       show: !isAdmin
     },
-
-    {
-      path: "/problem-analytics",
-      icon: <BarChart2 size={20} />,
-      text: "รายงานการวิเคราะห์ปัญหา",
-      show: isEquipManager
-    },
-
+  
     {
       path: "/equipment",
       icon: <Wrench size={20} />,
       text: "จัดการครุภัณฑ์",
       show: isEquipManager
     },
+  
     {
       path: "/status",
       icon: <Settings size={20} />,
       text: "จัดการสถานะ",
       show: isEquipManager
     },
+  
     {
       path: "/computer-center",
       icon: <Monitor size={20} />,
       text: "ปรับสถานะรายการที่ส่งซ่อม",
       show: isEquipManager
     },
+  
+    {
+      path: "/problem-analytics",
+      icon: <BarChart2 size={20} />,
+      text: "รายงานการวิเคราะห์ปัญหา",
+      show: isEquipManager
+    },
+  
     {
       path: "/unfixable",
       icon: <AlertCircle size={20} />,

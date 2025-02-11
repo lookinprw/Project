@@ -1,4 +1,3 @@
-// middleware/auth.js
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -10,7 +9,7 @@ const generateAccessToken = (user) => {
       role: user.role,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "40m" }
   );
 };
 
@@ -31,37 +30,26 @@ const auth = async (req, res, next) => {
     if (!authHeader) {
       return res.status(401).json({
         success: false,
-        message: "Access denied. No token provided.",
+        message: "Access denied. No token provided."
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.replace('Bearer ', '');
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Invalid token format.",
+        message: "Invalid token format."
       });
     }
 
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
-      next();
-    } catch (error) {
-      if (error.name === "TokenExpiredError") {
-        return res.status(401).json({
-          success: false,
-          message: "Token expired",
-          expired: true,
-        });
-      }
-      throw error;
-    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
   } catch (error) {
-    console.error("Auth error:", error.message);
+    console.error("Auth error:", error);
     res.status(401).json({
       success: false,
-      message: "Invalid token.",
+      message: "Invalid token."
     });
   }
 };

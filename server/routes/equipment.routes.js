@@ -1,20 +1,17 @@
-// equipment.routes.js
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db.config");
 const { auth, checkRole } = require("../middleware/auth");
 
 const VALID_STATUSES = ["active", "maintenance", "inactive"];
-const VALID_ROLES = ["admin", "equipment_manager", "equipment_assistant"];
 
-// Get all equipment
 router.get("/", auth, async (req, res) => {
   try {
     const [equipment] = await db.execute(`
       SELECT 
         id,
         equipment_id,
-        name as equipment_name,  /* Alias name as equipment_name */
+        name,  
         type,
         room,
         status,
@@ -37,7 +34,7 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// Add new equipment (admin/equipment_manager only)
+
 router.post(
   "/",
   auth,
@@ -103,98 +100,104 @@ router.post(
 );
 
 // Update equipment
-router.put(
-  "/:id",
-  auth,
-  checkRole(["admin", "equipment_manager"]),
-  async (req, res) => {
-    const connection = await db.getConnection();
+router.put("/:id", auth, checkRole(["admin", "equipment_manager"]), async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
 
-    try {
-      await connection.beginTransaction();
+    const { id } = req.params;
+    const { equipment_id, name, type, room, status } = req.body;
 
-      const { id } = req.params;
-      const { equipment_id, name, type, room, status } = req.body;
+    // Get all problems for this equipment
+    const [problems] = await connection.execute(
+      `SELECT p.*, s.id as status_id 
+       FROM problems p 
+       JOIN status s ON p.status_id = s.id 
+       WHERE p.equipment_id = ?`,
+      [equipment_id]
+    );
 
-      // Validate status
-      if (!VALID_STATUSES.includes(status)) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: "สถานะไม่ถูกต้อง",
-        });
-      }
+    // Check active problems
+    const hasActiveProblems = problems.some(p => 
+      [1, 2, 7].includes(p.status_id) // รอดำเนินการ, กำลังดำเนินการ, กำลังส่งไปศูนย์คอม
+    );
 
-      await connection.execute(
-        `UPDATE equipment 
-         SET equipment_id = ?, 
-             name = ?, 
-             type = ?, 
-             room = ?, 
-             status = ?,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [equipment_id, name, type, room, status, id]
-      );
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: "อัพเดทครุภัณฑ์สำเร็จ",
-      });
-    } catch (error) {
-      await connection.rollback();
-      console.error("Error updating equipment:", error);
-      res.status(500).json({
-        success: false,
-        message: "เกิดข้อผิดพลาดในการอัพเดทครุภัณฑ์",
-      });
-    } finally {
-      connection.release();
+    if (hasActiveProblems && status === 'active') {
+      throw new Error("ไม่สามารถเปลี่ยนสถานะเป็นใช้งานได้เนื่องจากมีการแจ้งปัญหาที่ยังไม่เสร็จสิ้น");
     }
+
+    await connection.execute(
+      `UPDATE equipment 
+       SET equipment_id = ?, name = ?, type = ?, room = ?, status = ?
+       WHERE id = ?`,
+      [equipment_id, name, type, room, status, id]
+    );
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาด"
+    });
+  } finally {
+    connection.release();
   }
-);
+});
 
 // Delete equipment (admin only)
-router.delete("/:id", auth, checkRole(["admin"]), async (req, res) => {
+router.delete("/:id", auth, checkRole(["admin", "equipment_manager"]), async (req, res) => {
+  const connection = await db.getConnection();
   try {
+    await connection.beginTransaction();
+
     const { id } = req.params;
 
-    // Check if equipment is referenced in problems
-    const [problems] = await db.execute(
-      "SELECT id FROM problems WHERE equipment_id IN (SELECT equipment_id FROM equipment WHERE id = ?)",
+    // First check if equipment exists and get its equipment_id
+    const [equipment] = await connection.execute(
+      "SELECT equipment_id FROM equipment WHERE id = ?",
       [id]
     );
 
-    if (problems.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "ไม่สามารถลบครุภัณฑ์ได้เนื่องจากมีการแจ้งปัญหาที่เกี่ยวข้อง",
-      });
+    if (equipment.length === 0) {
+      throw new Error("ไม่พบครุภัณฑ์ที่ต้องการลบ");
     }
 
-    const [result] = await db.execute("DELETE FROM equipment WHERE id = ?", [
-      id,
-    ]);
+    // Check if equipment has any problems
+    const [problems] = await connection.execute(
+      "SELECT id FROM problems WHERE equipment_id = ?",
+      [equipment[0].equipment_id]
+    );
+
+    if (problems.length > 0) {
+      throw new Error("ไม่สามารถลบครุภัณฑ์ได้เนื่องจากมีการแจ้งปัญหาที่เกี่ยวข้อง");
+    }
+
+    // Delete the equipment if no problems are associated
+    const [result] = await connection.execute(
+      "DELETE FROM equipment WHERE id = ?", 
+      [id]
+    );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "ไม่พบครุภัณฑ์ที่ต้องการลบ",
-      });
+      throw new Error("ไม่พบครุภัณฑ์ที่ต้องการลบ");
     }
 
-    res.json({
-      success: true,
-      message: "ลบครุภัณฑ์สำเร็จ",
+    await connection.commit();
+    res.json({ 
+      success: true, 
+      message: "ลบครุภัณฑ์สำเร็จ" 
     });
+
   } catch (error) {
-    console.error("Error deleting equipment:", error);
-    res.status(500).json({
+    await connection.rollback();
+    res.status(400).json({
       success: false,
-      message: "เกิดข้อผิดพลาดในการลบครุภัณฑ์",
+      message: error.message || "เกิดข้อผิดพลาดในการลบครุภัณฑ์"
     });
+  } finally {
+    connection.release();
   }
 });
 

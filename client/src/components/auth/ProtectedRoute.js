@@ -5,7 +5,6 @@ function ProtectedRoute({ children, requiredRole }) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Debug log
   console.log("Protected route:", {
     hasUser: !!user,
     loading,
@@ -13,12 +12,10 @@ function ProtectedRoute({ children, requiredRole }) {
     currentRole: user?.role,
   });
 
-  // If no user and not loading, redirect to login
   if (!user && !loading) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Show loading spinner while checking auth
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -27,7 +24,6 @@ function ProtectedRoute({ children, requiredRole }) {
     );
   }
 
-  // Check role requirements
   if (requiredRole && user) {
     const allowedRoles = Array.isArray(requiredRole)
       ? requiredRole

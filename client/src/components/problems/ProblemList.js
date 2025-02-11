@@ -26,6 +26,18 @@ function ProblemList() {
     );
   };
 
+  const getStatusFilters = () => {
+    const resolvedId = 3;
+    const damagedId = 8;
+    
+    return [
+      { id: resolvedId, label: "เสร็จสิ้น" },
+      { id: damagedId, label: "ชำรุดเสียหาย" }
+    ];
+  };
+  
+  
+
   const handleStatusChange = async (problemId, newStatusId) => {
     try {
       await api.patch(`/problems/${problemId}/status`, {

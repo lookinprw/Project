@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import api from "../../utils/axios";
 import { AlertCircle } from "lucide-react";
+import api from "../../utils/axios";
 
 export function StatusSelect({ problem, statuses = [], onStatusChange }) {
   const [updating, setUpdating] = useState(false);
@@ -8,25 +8,23 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [showWarningDialog, setShowWarningDialog] = useState(false);
   const [comment, setComment] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState(problem.status_id);
+  const [selectedId, setSelectedId] = useState(problem?.status_id);
 
-  const handleChange = async (e) => {
-    const newStatusId = parseInt(e.target.value);
-    const status = statuses.find((s) => s.id === newStatusId);
-
-    if (status?.name === "referred_to_cc") {
-      setSelectedStatus(newStatusId);
+  const handleChange = (e) => {
+    const statusId = parseInt(e.target.value);
+    if (statusId === 7) {
+      setSelectedId(statusId);
       setShowWarningDialog(true);
       return;
     }
 
-    if (status?.name === "cannot_fix") {
-      setSelectedStatus(newStatusId);
+    if (statusId === 4) {
+      setSelectedId(statusId);
       setShowCommentModal(true);
       return;
     }
 
-    updateStatus(newStatusId);
+    updateStatus(statusId);
   };
 
   const handleWarningConfirm = () => {
@@ -35,20 +33,20 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
     setShowCommentModal(true);
   };
 
-  const updateStatus = async (statusId, comment = "") => {
+  const updateStatus = async (statusId, commentText = "") => {
     setUpdating(true);
     setError("");
 
     try {
       const response = await api.patch(`/problems/${problem.id}/status`, {
         status_id: statusId,
-        comment,
+        comment: commentText
       });
 
       if (response.data.success) {
         onStatusChange();
-        setShowWarningDialog(false);
         setShowCommentModal(false);
+        setShowWarningDialog(false);
         setComment("");
       }
     } catch (err) {
@@ -58,47 +56,33 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
     }
   };
 
-  const handleCommentSubmit = async (e) => {
+  const handleCommentSubmit = (e) => {
     e.preventDefault();
     if (!comment.trim()) {
       setError("กรุณากรอกเหตุผล");
       return;
     }
-    await updateStatus(selectedStatus, comment);
+    updateStatus(selectedId, comment);
   };
 
-  const getModalTitle = (statusId) => {
-    const status = statuses.find((s) => s.id === statusId);
-    return status?.name === "referred_to_cc"
-      ? "รายละเอียดการส่งซ่อม"
-      : "ระบุเหตุผล";
-  };
-
-  const getModalDescription = (statusId) => {
-    const status = statuses.find((s) => s.id === statusId);
-    return status?.name === "referred_to_cc"
-      ? "กรุณาระบุรายละเอียดการส่งซ่อมที่ศูนย์คอมพิวเตอร์"
-      : "กรุณาระบุเหตุผลที่ไม่สามารถแก้ไขได้";
-  };
+  if (!problem) return null;
 
   return (
     <div>
       <select
-        value={selectedStatus}
+        value={selectedId}
         onChange={handleChange}
         disabled={updating}
         className="mt-1 block w-40 rounded-md text-sm font-medium"
         style={{ backgroundColor: problem.status_color }}
       >
-        {statuses.map((status) => (
-          <option
+        {statuses.map(status => (
+          <option 
             key={status.id}
             value={status.id}
             style={{ backgroundColor: status.color }}
           >
-            {status.name === "referred_to_cc"
-              ? "กำลังส่งไปศูนย์คอม"
-              : status.name}
+            {status.name}
           </option>
         ))}
       </select>
@@ -111,12 +95,8 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
             <div className="flex items-start space-x-3">
               <AlertCircle className="h-6 w-6 text-yellow-500 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  ยืนยันการส่งซ่อม
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  คุณต้องการส่งครุภัณฑ์นี้ไปซ่อมที่ศูนย์คอมพิวเตอร์ใช่หรือไม่?
-                </p>
+                <h3 className="text-lg font-semibold text-gray-900">ยืนยันการส่งซ่อม</h3>
+                <p className="mt-2 text-sm text-gray-500">คุณต้องการส่งครุภัณฑ์นี้ไปซ่อมที่ศูนย์คอมพิวเตอร์ใช่หรือไม่?</p>
                 <ul className="mt-2 text-sm text-gray-500 list-disc ml-4 space-y-1">
                   <li>ตรวจสอบปัญหาเบื้องต้นแล้ว</li>
                   <li>ไม่สามารถซ่อมได้ด้วยทีมงานภายใน</li>
@@ -128,7 +108,7 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
               <button
                 onClick={() => {
                   setShowWarningDialog(false);
-                  setSelectedStatus(problem.status_id);
+                  setSelectedId(problem.status_id);
                 }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
               >
@@ -150,10 +130,12 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="mb-4">
               <h3 className="text-lg font-medium text-gray-900">
-                {getModalTitle(selectedStatus)}
+                {selectedId === 7 ? "รายละเอียดการส่งซ่อม" : "ระบุเหตุผล"}
               </h3>
               <p className="text-sm text-gray-500">
-                {getModalDescription(selectedStatus)}
+                {selectedId === 7
+                  ? "กรุณาระบุรายละเอียดการส่งซ่อมที่ศูนย์คอมพิวเตอร์"
+                  : "กรุณาระบุเหตุผลที่ไม่สามารถแก้ไขได้"}
               </p>
             </div>
 
@@ -170,12 +152,7 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
                 onChange={(e) => setComment(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 rows="4"
-                placeholder={
-                  statuses.find((s) => s.id === selectedStatus)?.name ===
-                  "referred_to_cc"
-                    ? "รายละเอียดการส่งซ่อม..."
-                    : "ระบุเหตุผล..."
-                }
+                placeholder={selectedId === 7 ? "รายละเอียดการส่งซ่อม..." : "ระบุเหตุผล..."}
                 required
               />
 
@@ -186,7 +163,7 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
                     setShowCommentModal(false);
                     setComment("");
                     setError("");
-                    setSelectedStatus(problem.status_id);
+                    setSelectedId(problem.status_id);
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >

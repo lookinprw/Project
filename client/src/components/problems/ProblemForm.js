@@ -150,7 +150,10 @@ function ProblemForm({ onClose }) {
 
   const checkSimilarProblems = async (equipment_id, problem_type) => {
     try {
-      const response = await api.get(`/problems/similar/${equipment_id}/${problem_type}`);
+      const activeStatusIds = [1, 2, 7]; // Pending, In Progress, Computer Center
+      const response = await api.get(
+        `/problems/similar/${equipment_id}/${problem_type}?statuses=${activeStatusIds.join(',')}`
+      );
       if (response.data.problems?.length > 0) {
         setSimilarProblems(response.data.problems);
         setShowSimilarProblems(true);
@@ -174,8 +177,8 @@ function ProblemForm({ onClose }) {
       return false;
     }
 
-    if (formData.description.length < 10) {
-      setError("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 10 ตัวอักษร");
+    if (formData.description.length < 5) {
+      setError("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
       return false;
     }
 
@@ -247,14 +250,17 @@ function ProblemForm({ onClose }) {
         <div className="space-y-4">
           {similarProblems.map((problem) => (
             <div key={problem.id} className="border rounded-lg p-4">
-              <p className="font-medium">{problem.equipment_name}</p>
-              <p className="text-sm text-gray-600 mb-2">
-                {problem.description}
-              </p>
-              <p className="text-sm text-gray-500">
-                แจ้งโดย: {problem.firstname} {problem.lastname}
-              </p>
-              <div className="mt-2">
+              <div className="flex justify-between items-start mb-2">
+                <p className="font-medium">{problem.equipment_name}</p>
+                <p className="text-sm text-gray-500">
+                  {new Date(problem.created_at).toLocaleDateString('th-TH')}
+                </p>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">{problem.description}</p>
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-500">
+                  แจ้งโดย: {problem.firstname} {problem.lastname}
+                </p>
                 <span
                   className="px-2 py-1 text-xs rounded-full"
                   style={{ backgroundColor: problem.status_color }}
@@ -264,49 +270,47 @@ function ProblemForm({ onClose }) {
               </div>
             </div>
           ))}
-          <div className="flex justify-end space-x-3 mt-4">
-            <button
-              onClick={() => setShowSimilarProblems(false)}
-              className="px-4 py-2 text-gray-700 border rounded-md"
-            >
-              ยกเลิก
-            </button>
-            <button
-              onClick={async () => {
-                setShowSimilarProblems(false);
-                const formDataToSend = new FormData();
-                formDataToSend.append("equipment_id", formData.equipment_id);
-                formDataToSend.append("description", formData.description);
-                formDataToSend.append("problem_type", formData.problem_type);
+        </div>
+        <div className="flex justify-end space-x-3 mt-4">
+          <button
+            onClick={() => setShowSimilarProblems(false)}
+            className="px-4 py-2 text-gray-700 border rounded-md"
+          >
+            ยกเลิก
+          </button>
+          <button
+            onClick={async () => {
+              setShowSimilarProblems(false);
+              const formDataToSend = new FormData();
+              formDataToSend.append("equipment_id", formData.equipment_id);
+              formDataToSend.append("description", formData.description);
+              formDataToSend.append("problem_type", formData.problem_type);
   
-                if (file) {
-                  formDataToSend.append("image", file);
+              if (file) {
+                formDataToSend.append("image", file);
+              }
+  
+              setIsSubmitting(true);
+              try {
+                const response = await api.post("/problems", formDataToSend, {
+                  headers: {
+                    "Content-Type": "multipart/form-data",
+                  },
+                });
+  
+                if (response.data.success) {
+                  onClose();
                 }
-  
-                setIsSubmitting(true);
-                try {
-                  const response = await api.post("/problems", formDataToSend, {
-                    headers: {
-                      "Content-Type": "multipart/form-data",
-                    },
-                  });
-  
-                  if (response.data.success) {
-                    onClose();
-                  }
-                } catch (error) {
-                  setError(
-                    error.response?.data?.message || "เกิดข้อผิดพลาดในการส่งข้อมูล"
-                  );
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
-            >
-              แจ้งปัญหาใหม่
-            </button>
-          </div>
+              } catch (error) {
+                setError(error.response?.data?.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+            className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+          >
+            แจ้งปัญหาใหม่
+          </button>
         </div>
       </div>
     </div>
@@ -392,7 +396,7 @@ function ProblemForm({ onClose }) {
               <option value="">เลือกครุภัณฑ์</option>
               {filteredEquipment.map((eq) => (
                 <option key={eq.equipment_id} value={eq.equipment_id}>
-                  {eq.equipment_id} - {eq.equipment_name} - ห้อง {eq.room}
+                  {eq.equipment_id} - {eq.name} - ห้อง {eq.room}
                 </option>
               ))}
             </select>
@@ -402,7 +406,7 @@ function ProblemForm({ onClose }) {
         {/* Description - Optional */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            รายละเอียดเพิ่มเติม (ถ้ามี)
+            รายละเอียดเพิ่มเติม 
           </label>
           <textarea
             name="description"

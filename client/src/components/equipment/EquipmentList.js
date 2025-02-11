@@ -29,13 +29,12 @@ function EquipmentList({ onEdit }) {
     fetchEquipment();
   }, []);
 
-  // Filter equipment when search query changes
   useEffect(() => {
     const filtered = equipment.filter((item) => {
-      // Ensure all values exist before calling toLowerCase()
+
       const searchLower = searchQuery.toLowerCase();
       const equipmentId = item.equipment_id?.toLowerCase() || "";
-      const name = item.equipment_name?.toLowerCase() || ""; // Note: changed from item.name to item.equipment_name
+      const name = item.name?.toLowerCase() || ""; // Note: changed from item.name to item.equipment_name
       const type = item.type?.toLowerCase() || "";
       const room = item.room?.toLowerCase() || "";
       const status = getStatusText(item.status)?.toLowerCase() || "";
@@ -56,11 +55,11 @@ function EquipmentList({ onEdit }) {
       try {
         const response = await api.delete(`/equipment/${id}`);
         if (response.data.success) {
-          fetchEquipment();
+          fetchEquipment(); // Refresh the list
         }
       } catch (error) {
         console.error("Error deleting equipment:", error);
-        setError("ไม่สามารถลบครุภัณฑ์ได้");
+        setError(error.response?.data?.message || "ไม่สามารถลบครุภัณฑ์ได้");
       }
     }
   };
@@ -170,7 +169,7 @@ function EquipmentList({ onEdit }) {
                     {item.equipment_id}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {item.equipment_name}
+                    {item.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {item.type}

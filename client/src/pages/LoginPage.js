@@ -1,4 +1,3 @@
-// src/pages/LoginPage.js
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, AlertCircle, User, Lock } from "lucide-react";
@@ -32,7 +31,12 @@ function LoginPage() {
     try {
       const result = await login(formData);
       if (result.success) {
-        navigate("/dashboard");
+        // Add role-based navigation
+        if (result.user?.role === "admin") {
+          navigate("/users", { replace: true });
+        } else {
+          navigate("/dashboard", { replace: true });
+        }
       } else {
         setError(result.error || "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
       }
@@ -180,12 +184,10 @@ function LoginPage() {
           {/* Test Account Information */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
             <h3 className="text-sm font-medium text-gray-700 mb-2">
-              ทดสอบเข้าสู่ระบบด้วย:
+              หากลืมรหัสผ่าน
             </h3>
             <div className="space-y-1 text-sm text-gray-600">
-              <p>นักศึกษา: 12567 / 12567</p>
-              <p>แอดมิน: admin / admin</p>
-              <p>ผู้ดูแลครุภัณฑ์: manager / manager</p>
+              <p>โปรดติดต่อ 08x-xxx-xxxx</p>
             </div>
           </div>
         </div>

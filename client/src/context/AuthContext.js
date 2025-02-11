@@ -71,24 +71,23 @@ export const AuthProvider = ({ children }) => {
 
   const refreshUserData = useCallback(async () => {
     try {
-      if (!user?.id || !user?.token) return false;
-
-      const response = await api.get(`/users/${user.id}`);
+      if (!user?.token) return false;
+  
+      const response = await api.get('/users/validate');
       if (response.data.success) {
+        // Update user data but keep tokens
         const updatedUser = {
-          ...user,
           ...response.data.user,
           token: user.token,
-          refreshToken: user.refreshToken,
+          refreshToken: user.refreshToken
         };
-
-        localStorage.setItem("user", JSON.stringify(updatedUser));
+        localStorage.setItem('user', JSON.stringify(updatedUser));
         setUser(updatedUser);
         return true;
       }
       return false;
     } catch (error) {
-      console.error("Error refreshing user data:", error);
+      console.error("Error validating user:", error);
       if (error.response?.status === 401) {
         const refreshed = await refreshToken();
         if (refreshed) {
@@ -115,14 +114,8 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem("user", JSON.stringify(userData));
         setUser(userData);
   
-        // Add role-based redirect
-        if (userData.role === "admin") {
-          window.location.href = "/users";  // Use same style as logout redirect
-        } else {
-          window.location.href = "/dashboard";
-        }
-  
-        return { success: true };
+        // Don't use window.location.href - use navigate instead
+        return { success: true, user: userData };
       }
   
       return { success: false, error: response.data.message };
@@ -141,7 +134,11 @@ export const AuthProvider = ({ children }) => {
       if (!user || initialized) return;
       try {
         setLoading(true);
-        await refreshUserData();
+        // Just validate the token instead of fetching user data
+        const isValid = await refreshUserData();
+        if (!isValid) {
+          logout();
+        }
       } catch (error) {
         console.error("Auth initialization error:", error);
         logout();
@@ -150,12 +147,13 @@ export const AuthProvider = ({ children }) => {
         setInitialized(true);
       }
     };
-
+  
     initialize();
-  }, []);
+  }, [user, initialized, refreshUserData, logout]);
 
   const value = {
     user,
+    setUser,
     login,
     logout,
     loading,

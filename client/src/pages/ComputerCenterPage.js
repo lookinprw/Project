@@ -29,7 +29,7 @@ function ComputerCenterPage() {
 
       if (problemsRes.data.success) {
         const referredProblems = problemsRes.data.data.filter(
-          (problem) => problem.status_name === "referred_to_cc"
+          (problem) => problem.status_id === 7 // Computer Center ID
         );
         setProblems(referredProblems);
       }
@@ -47,8 +47,13 @@ function ComputerCenterPage() {
       return;
     }
 
-    const targetStatus = statuses.find((s) => s.name === statusName);
-    if (!targetStatus) {
+    const statusMap = {
+      damaged: 8,
+      resolved: 3,
+    };
+
+    const statusId = statusMap[statusName];
+    if (!statusId) {
       setError("ไม่พบสถานะที่ต้องการ");
       return;
     }
@@ -73,14 +78,14 @@ function ComputerCenterPage() {
       await Promise.all(
         selectedProblems.map((problemId) =>
           api.patch(`/problems/${problemId}/status`, {
-            status_id: targetStatus.id,
+            status_id: statusId,
             comment: confirmMessage,
           })
         )
       );
 
       setSelectedProblems([]);
-      await fetchData(); // Use fetchData instead of fetchReferredProblems
+      await fetchData();
     } catch (err) {
       console.error("Error updating status:", err);
       setError("ไม่สามารถอัพเดทสถานะได้");
@@ -140,14 +145,14 @@ function ComputerCenterPage() {
           {problems.length > 0 && (
             <div className="space-x-4">
               <button
-                onClick={() => handleBulkStatusUpdate("damaged")}
+                onClick={() => handleBulkStatusUpdate("ชำรุดเสียหาย")}
                 disabled={updating || selectedProblems.length === 0}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 ชำรุดเสียหาย
               </button>
               <button
-                onClick={() => handleBulkStatusUpdate("resolved")}
+                onClick={() => handleBulkStatusUpdate("เสร็จสิ")}
                 disabled={updating || selectedProblems.length === 0}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
@@ -177,6 +182,9 @@ function ComputerCenterPage() {
                   />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  ลำดับ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   อุปกรณ์
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -194,7 +202,7 @@ function ComputerCenterPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {problems.map((problem) => (
+              {problems.map((problem, index) => (
                 <tr key={problem.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <input
@@ -203,6 +211,9 @@ function ComputerCenterPage() {
                       onChange={() => handleSelectProblem(problem.id)}
                       className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {index + 1}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {problem.equipment_name}

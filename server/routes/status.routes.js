@@ -1,10 +1,8 @@
-// routes/status.routes.js
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db.config");
 const { auth, checkRole } = require("../middleware/auth");
 
-// Get all statuses
 router.get("/", auth, async (req, res) => {
   try {
     const [statuses] = await db.execute(
@@ -18,7 +16,6 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// Add new status
 router.post(
   "/",
   auth,

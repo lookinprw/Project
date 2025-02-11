@@ -33,33 +33,33 @@ function RegisterPage() {
   // Define validateForm at component level
   const validateForm = () => {
     const newErrors = {};
-
-    // Validate student ID
+  
+    // Validate username
     if (!formData.username) {
-      newErrors.username = "กรุณากรอกรหัสนักศึกษา";
-    } else if (formData.username.length !== 8) {
-      newErrors.username = "รหัสนักศึกษาต้องมี 8 หลัก";
+      newErrors.username = "กรุณากรอกรหัสผู้ใช้";
+    } else if (formData.username.length < 8) {  // Change from !== to <
+      newErrors.username = "รหัสผู้ใช้ต้องมีความยาวอย่างน้อย 8 ตัวอักษร";  // Fix typo in error message
     }
-
-    // Validate other fields
+  
+    // Rest of your validation remains the same
     if (!formData.firstname.trim()) {
       newErrors.firstname = "กรุณากรอกชื่อ";
     }
-
+  
     if (!formData.lastname.trim()) {
       newErrors.lastname = "กรุณากรอกนามสกุล";
     }
-
+  
     if (!formData.password) {
       newErrors.password = "กรุณากรอกรหัสผ่าน";
     } else if (formData.password.length < 6) {
       newErrors.password = "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร";
     }
-
+  
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "รหัสผ่านไม่ตรงกัน";
     }
-
+  
     setFieldErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };

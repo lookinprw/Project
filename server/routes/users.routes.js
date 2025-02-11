@@ -1,4 +1,3 @@
-// routes/users.routes.js
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db.config");
@@ -9,6 +8,7 @@ const {
   generateRefreshToken,
 } = require("../middleware/auth");
 const bcrypt = require("bcrypt");
+const VALID_ROLES = ["admin", "equipment_manager", "equipment_assistant", "reporter"];
 
 const hashPassword = async (password) => {
   const saltRounds = 10;
@@ -19,7 +19,7 @@ router.get("/", auth, async (req, res) => {
   try {
     let query = `
       SELECT id, username, firstname, lastname, role, branch 
-      FROM users WHERE 1=1
+      FROM users
     `;
     const queryParams = [];
 
@@ -43,6 +43,37 @@ router.get("/", auth, async (req, res) => {
     });
   }
 });
+
+router.get("/validate", auth, async (req, res) => {
+  try {
+    // Since auth middleware already validates the token,
+    // if we reach here, the token is valid
+    const [user] = await db.execute(
+      "SELECT id, username, firstname, lastname, role, branch FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    if (user.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      user: user[0]
+    });
+  } catch (error) {
+    console.error("Validation error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error validating user"
+    });
+  }
+});
+
+
 
 // Login route
 router.post("/login", async (req, res) => {
@@ -142,12 +173,7 @@ router.post("/register", async (req, res) => {
     }
 
     // Password length validation
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร",
-      });
-    }
+    
 
     // Hash the password before saving
     const hashedPassword = await hashPassword(password);
@@ -155,7 +181,7 @@ router.post("/register", async (req, res) => {
     // Save user with hashed password
     await db.execute(
       "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
-      [username, hashedPassword, firstname, lastname, "student", branch]
+      [username, hashedPassword, firstname, lastname, "reporter", branch]
     );
 
     res.json({
@@ -224,69 +250,58 @@ router.patch("/:id/role", auth, checkRole(["admin"]), async (req, res) => {
 
 // Update LINE user ID
 router.patch("/:id", auth, async (req, res) => {
+  const connection = await db.getConnection();
   try {
+    await connection.beginTransaction();
+    
     const { id } = req.params;
     const { firstname, lastname, branch } = req.body;
 
-    const [result] = await db.query(
-      "UPDATE users SET firstname = ?, lastname = ?, branch = ?, updated_at = NOW() WHERE id = ?",
-      [firstname, lastname, branch, id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    const [rows] = await db.query(
-      "SELECT id, username, firstname, lastname, role, branch FROM users WHERE id = ?",
+    // Verify user exists first
+    const [userExists] = await connection.execute(
+      "SELECT id FROM users WHERE id = ?",
       [id]
     );
 
-    res.json({
-      success: true,
-      message: "Profile updated successfully",
-      user: rows[0],
-    });
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error updating profile",
-      error: error.message,
-    });
-  }
-});
+    if (userExists.length === 0) {
+      throw new Error("ไม่พบผู้ใช้งาน");
+    }
 
-router.get("/:id", auth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [users] = await db.execute(
-      `SELECT id, username, firstname, lastname, role, branch, created_at, updated_at 
+    // Update user info
+    await connection.execute(
+      `UPDATE users 
+       SET firstname = ?, 
+           lastname = ?, 
+           branch = ?, 
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [firstname, lastname, branch, id]
+    );
+
+    // Get updated user data
+    const [updatedUser] = await connection.execute(
+      `SELECT id, username, firstname, lastname, role, branch 
        FROM users WHERE id = ?`,
       [id]
     );
 
-    if (users.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "ไม่พบผู้ใช้งาน" });
-    }
+    await connection.commit();
 
-    if (req.user.role !== "admin" && req.user.id !== parseInt(id)) {
-      return res
-        .status(403)
-        .json({ success: false, message: "ไม่มีสิทธิ์ในการเข้าถึงข้อมูล" });
-    }
+    res.json({
+      success: true,
+      message: "อัพเดทข้อมูลสำเร็จ",
+      user: updatedUser[0]
+    });
 
-    res.json({ success: true, user: users[0] });
   } catch (error) {
-    console.error("Error fetching user:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้" });
+    await connection.rollback();
+    console.error("Error updating profile:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล"
+    });
+  } finally {
+    connection.release();
   }
 });
 
@@ -439,66 +454,59 @@ router.post("/refresh-token", async (req, res) => {
   }
 });
 
-router.post(
-  "/new",
-  auth,
-  checkRole(["admin", "equipment_manager"]),
-  async (req, res) => {
-    try {
-      const { username, password, firstname, lastname, branch, role } =
-        req.body;
+router.post("/new", auth, checkRole(["admin", "equipment_manager"]), async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
 
-      // Validate input
-      if (
-        !username ||
-        !password ||
-        !firstname ||
-        !lastname ||
-        !branch ||
-        !role
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "กรุณากรอกข้อมูลให้ครบถ้วน",
-        });
-      }
+    const { username, password, firstname, lastname, branch, role } = req.body;
 
-      // Check existing user
-      const [existingUsers] = await db.execute(
-        "SELECT id FROM users WHERE username = ?",
-        [username]
-      );
+    // Logging for debugging
+    console.log("Received user data:", { username, firstname, lastname, branch, role });
 
-      if (existingUsers.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: "รหัสผู้ใช้นี้มีในระบบแล้ว",
-        });
-      }
-
-      // Hash password
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-      // Insert user with hashed password
-      await db.execute(
-        "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
-        [username, hashedPassword, firstname, lastname, role, branch]
-      );
-
-      res.status(201).json({
-        success: true,
-        message: "เพิ่มผู้ใช้สำเร็จ",
-      });
-    } catch (error) {
-      console.error("Error adding user:", error);
-      res.status(500).json({
-        success: false,
-        message: "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้",
-      });
+    // Better validation check
+    if (!username?.trim() || !password?.trim() || !firstname?.trim() || !lastname?.trim() || !branch?.trim() || !role?.trim()) {
+      throw new Error("กรุณากรอกข้อมูลให้ครบถ้วน");
     }
+
+    // Check existing user
+    const [existingUsers] = await connection.execute(
+      "SELECT id FROM users WHERE username = ?",
+      [username]
+    );
+
+    if (existingUsers.length > 0) {
+      throw new Error("รหัสผู้ใช้นี้มีในระบบแล้ว");
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Insert user
+    const [result] = await connection.execute(
+      "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
+      [username, hashedPassword, firstname, lastname, role, branch]
+    );
+
+    await connection.commit();
+
+    res.status(201).json({
+      success: true,
+      message: "เพิ่มผู้ใช้สำเร็จ",
+      userId: result.insertId
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error creating user:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้"
+    });
+  } finally {
+    connection.release();
   }
-);
+});
 
 router.post(
   "/admin-reset-password",
@@ -545,36 +553,60 @@ router.post(
 );
 
 router.post("/change-password", auth, async (req, res) => {
+  const connection = await db.getConnection();
   try {
     const { currentPassword, newPassword } = req.body;
-    const [user] = await db.execute("SELECT * FROM users WHERE id = ?", [
-      req.user.id,
-    ]);
+    const [rows] = await connection.execute(
+      "SELECT * FROM users WHERE id = ?", 
+      [req.user.id]
+    );
 
-    const isValid = await bcrypt.compare(currentPassword, user[0].password);
-    if (!isValid) {
-      return res.status(400).json({
+    if (rows.length === 0) {
+      return res.status(404).json({
         success: false,
-        message: "รหัสผ่านปัจจุบันไม่ถูกต้อง",
+        message: "ไม่พบผู้ใช้งาน"
       });
     }
 
-    const hashedPassword = await hashPassword(newPassword);
-    await db.execute("UPDATE users SET password = ? WHERE id = ?", [
-      hashedPassword,
-      req.user.id,
-    ]);
+    const user = rows[0];
+    
+    // Check if password is plain text or hashed
+    let isValid;
+    if (user.password.startsWith('$2')) {
+      // Password is hashed with bcrypt
+      isValid = await bcrypt.compare(currentPassword, user.password);
+    } else {
+      // Password is plain text
+      isValid = currentPassword === user.password;
+    }
+
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: "รหัสผ่านปัจจุบันไม่ถูกต้อง"
+      });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    await connection.execute(
+      "UPDATE users SET password = ? WHERE id = ?",
+      [hashedPassword, req.user.id]
+    );
 
     res.json({
       success: true,
-      message: "เปลี่ยนรหัสผ่านสำเร็จ",
+      message: "เปลี่ยนรหัสผ่านสำเร็จ"
     });
   } catch (error) {
-    console.error(error);
+    console.error('Password change error:', error);
     res.status(500).json({
       success: false,
-      message: "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน",
+      message: "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน"
     });
+  } finally {
+    connection.release();
   }
 });
 

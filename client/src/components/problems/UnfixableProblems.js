@@ -6,10 +6,6 @@ function UnfixableProblems() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchUnfixableProblems();
-  }, []);
-
   const fetchUnfixableProblems = async () => {
     try {
       setLoading(true);
@@ -23,6 +19,10 @@ function UnfixableProblems() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchUnfixableProblems();
+  }, []);
 
   if (loading) {
     return (
@@ -42,10 +42,13 @@ function UnfixableProblems() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                อุปกรณ์
+                ลำดับ
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 รหัสครุภัณฑ์
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                อุปกรณ์
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 ห้อง
@@ -62,19 +65,20 @@ function UnfixableProblems() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 ผู้รับผิดชอบ
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                สถานะ
-              </th>
+          
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {problems.map((problem) => (
+            {problems.map((problem, index) => (
               <tr key={problem.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {problem.equipment_name}
+                  {index + 1}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {problem.equipment_id}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {problem.equipment_name}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {problem.room}
@@ -90,17 +94,6 @@ function UnfixableProblems() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {problem.assigned_to_name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className="px-2 py-1 text-sm rounded-full"
-                    style={{
-                      backgroundColor: problem.status_color,
-                      color: "#000000",
-                    }}
-                  >
-                    {problem.status_name}
-                  </span>
                 </td>
               </tr>
             ))}

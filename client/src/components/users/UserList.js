@@ -15,7 +15,7 @@ function UserList() {
 
   const ROLE_OPTIONS = {
     admin: "ผู้ดูแลระบบ",
-    student: "นักศึกษา",
+    reporter: "ผู้แจ้งปัญหา",
     equipment_manager: "ผู้จัดการครุภัณฑ์",
     equipment_assistant: "ผู้ช่วยดูแลครุภัณฑ์",
   };
@@ -25,7 +25,7 @@ function UserList() {
       return ROLE_OPTIONS;
     } else if (currentUserRole === "equipment_manager") {
       return {
-        student: ROLE_OPTIONS.student,
+        student: ROLE_OPTIONS.reporter,
         equipment_assistant: ROLE_OPTIONS.equipment_assistant,
       };
     }

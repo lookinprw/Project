@@ -1,133 +1,185 @@
-// components/users/UserCreateForm.js
-import React, { useState } from "react";
-import api from "../../utils/axios";
+import React, { useState } from 'react';
+import api from '../../utils/axios';
 
 function UserCreateForm({ onSuccess }) {
   const [formData, setFormData] = useState({
-    student_id: "",
-    password: "",
-    firstname: "",
-    lastname: "",
-    branch: "ITD",
-    role: "student",
+    username: '',
+    password: '',
+    firstname: '',
+    lastname: '',
+    branch: 'ITD',
+    role: 'reporter'
   });
+
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(''); // Added missing state
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
+
     try {
-      const response = await api.post("/users/new", formData);
+      console.log("Submitting user data:", formData);
+
+      const response = await api.post("/users/new", {
+        username: formData.username.trim(),
+        password: formData.password.trim(),
+        firstname: formData.firstname.trim(),
+        lastname: formData.lastname.trim(),
+        branch: formData.branch.trim(),
+        role: formData.role.trim()
+      });
+
       if (response.data.success) {
-        onSuccess();
+        setSuccess("เพิ่มผู้ใช้สำเร็จ");
+        onSuccess?.();
+        setFormData({
+          username: '',
+          password: '',
+          firstname: '',
+          lastname: '',
+          branch: 'ITD',
+          role: 'reporter'
+        });
       }
     } catch (err) {
+      console.error("Error creating user:", err);
       setError(err.response?.data?.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-lg font-semibold mb-4">เพิ่มผู้ใช้ใหม่</h2>
+    <div className="bg-white shadow rounded-lg p-6">
+      <h2 className="text-lg font-semibold mb-6">เพิ่มผู้ใช้ใหม่</h2>
+
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-700">
+          {error}
+        </div>
       )}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      {success && (
+        <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 text-green-700">
+          {success}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium mb-1">รหัสผู้ใช้</label>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              รหัสผู้ใช้
+            </label>
             <input
               type="text"
-              value={formData.student_id}
-              onChange={(e) =>
-                setFormData({ ...formData, student_id: e.target.value })
-              }
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              name="username"
+              id="username"
+              value={formData.username}
+              onChange={handleChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">รหัสผ่าน</label>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              รหัสผ่าน
+            </label>
             <input
               type="password"
+              name="password"
+              id="password"
               value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              onChange={handleChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">ชื่อ</label>
+            <label htmlFor="firstname" className="block text-sm font-medium text-gray-700">
+              ชื่อ
+            </label>
             <input
               type="text"
+              name="firstname"
+              id="firstname"
               value={formData.firstname}
-              onChange={(e) =>
-                setFormData({ ...formData, firstname: e.target.value })
-              }
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              onChange={handleChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">นามสกุล</label>
+            <label htmlFor="lastname" className="block text-sm font-medium text-gray-700">
+              นามสกุล
+            </label>
             <input
               type="text"
+              name="lastname"
+              id="lastname"
               value={formData.lastname}
-              onChange={(e) =>
-                setFormData({ ...formData, lastname: e.target.value })
-              }
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              onChange={handleChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               required
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">สาขา</label>
+            <label htmlFor="branch" className="block text-sm font-medium text-gray-700">
+              สาขา
+            </label>
             <select
+              id="branch"
+              name="branch"
               value={formData.branch}
-              onChange={(e) =>
-                setFormData({ ...formData, branch: e.target.value })
-              }
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              onChange={handleChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="ITD">เทคโนโลยีสารสนเทศและนวัตกรรมดิจิทัล</option>
               <option value="MIT">นวัตกรรมสารสนเทศทางการแพทย์</option>
             </select>
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">บทบาท</label>
+            <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+              บทบาท
+            </label>
             <select
+              id="role"
+              name="role"
               value={formData.role}
-              onChange={(e) =>
-                setFormData({ ...formData, role: e.target.value })
-              }
-              className="w-full p-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              onChange={handleChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
-              <option value="student">นักศึกษา</option>
+              <option value="reporter">ผู้แจ้งปัญหา</option>
               <option value="equipment_assistant">ผู้ช่วยดูแลครุภัณฑ์</option>
               <option value="equipment_manager">ผู้จัดการครุภัณฑ์</option>
               <option value="admin">ผู้ดูแลระบบ</option>
             </select>
           </div>
         </div>
+
         <div className="flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={onSuccess}
-            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-          >
-            ยกเลิก
-          </button>
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            {loading ? "กำลังบันทึก..." : "เพิ่มผู้ใช้"}
+            {loading ? 'กำลังบันทึก...' : 'เพิ่มผู้ใช้'}
           </button>
         </div>
       </form>
