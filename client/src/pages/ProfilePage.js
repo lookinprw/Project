@@ -28,33 +28,36 @@ function ProfilePage() {
   const handleProfileUpdate = async () => {
     setLoading(true);
     setError("");
-  
+
     try {
       console.log("Updating profile with data:", formData); // Debug log
-  
+
       const response = await api.patch(`/users/${user.id}`, {
         firstname: formData.firstname.trim(),
         lastname: formData.lastname.trim(),
-        branch: formData.branch
+        branch: formData.branch,
       });
-  
+
       if (response.data.success) {
         // Update the global user state with the new data
-        setUser(prevUser => ({
+        setUser((prevUser) => ({
           ...prevUser,
-          ...response.data.user
+          ...response.data.user,
         }));
-        
+
         setSuccess("อัพเดทข้อมูลสำเร็จ");
         setIsEditing(false);
-        
+
         // Update localStorage
-        const currentUser = JSON.parse(localStorage.getItem('user'));
-        localStorage.setItem('user', JSON.stringify({
-          ...currentUser,
-          ...response.data.user
-        }));
-  
+        const currentUser = JSON.parse(localStorage.getItem("user"));
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            ...currentUser,
+            ...response.data.user,
+          })
+        );
+
         setTimeout(() => setSuccess(""), 3000);
       }
     } catch (err) {
@@ -73,22 +76,22 @@ function ProfilePage() {
       setError("รหัสผ่านใหม่ไม่ตรงกัน");
       return;
     }
-  
+
     setLoading(true);
     setError("");
-  
+
     try {
       // Add debug log
-      console.log('Sending password change request:', {
+      console.log("Sending password change request:", {
         currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword
+        newPassword: passwordData.newPassword,
       });
-  
+
       const response = await api.post("/users/change-password", {
         currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword
+        newPassword: passwordData.newPassword,
       });
-  
+
       if (response.data.success) {
         setSuccess("เปลี่ยนรหัสผ่านสำเร็จ");
         setShowPasswordForm(false);
@@ -100,8 +103,10 @@ function ProfilePage() {
         setTimeout(() => setSuccess(""), 3000);
       }
     } catch (err) {
-      console.error('Password change error:', err.response); // Add this debug log
-      setError(err.response?.data?.message || "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน");
+      console.error("Password change error:", err.response); // Add this debug log
+      setError(
+        err.response?.data?.message || "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน"
+      );
     } finally {
       setLoading(false);
     }
@@ -193,7 +198,7 @@ function ProfilePage() {
                       <option value="ITD">
                         เทคโนโลยีสารสนเทศและนวัตกรรมดิจิทัล
                       </option>
-                      <option value="MIT">นวัตกรรมสารสนเทศทางการแพทย์</option>
+                      <option value="IMI">นวัตกรรมสารสนเทศทางการแพทย์</option>
                     </select>
                   )}
                 </div>

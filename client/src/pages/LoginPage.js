@@ -1,6 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, AlertCircle, User, Lock } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  AlertCircle,
+  User,
+  Lock,
+  CheckCircle,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import Logo from "../assets/logo.png";
 
@@ -11,43 +18,116 @@ function LoginPage() {
     username: "",
     password: "",
   });
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    console.log("Error state changed:", error);
+  }, [error]);
+
+  // Special accounts configuration
+  const specialAccounts = {
+    admin: {
+      username: "admin",
+      role: "admin",
+      redirectPath: "/users",
+    },
+    support: {
+      username: "support",
+      role: "equipment_manager",
+      redirectPath: "/dashboard",
+    },
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.username) {
+      newErrors.username = "กรุณากรอกรหัสผู้ใช้";
+    } else {
+      const isSpecialAccount = Object.values(specialAccounts).some(
+        (account) => account.username === formData.username
+      );
+
+      if (!isSpecialAccount) {
+        if (formData.username.includes(" ")) {
+          newErrors.username = "รหัสผู้ใช้ต้องไม่มีช่องว่าง";
+        } else if (formData.username.length < 8) {
+          newErrors.username = "รหัสผู้ใช้ต้องมีความยาวอย่างน้อย 8 ตัวอักษร";
+        }
+      }
+    }
+
+    if (!formData.password) {
+      newErrors.password = "กรุณากรอกรหัสผ่าน";
+    }
+
+    setFieldErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    setError("");
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // Clear field-specific error when typing
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+
+    // Don't clear error state on input change
+    // Remove the error clearing code from here
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoading(true);
-    setError("");
+    setError(null);
 
     try {
       const result = await login(formData);
+      console.log("Login result:", result);
+
       if (result.success) {
-        // Add role-based navigation
-        if (result.user?.role === "admin") {
-          navigate("/users", { replace: true });
+        const specialAccount = Object.values(specialAccounts).find(
+          (account) => account.username === formData.username
+        );
+
+        if (specialAccount) {
+          navigate(specialAccount.redirectPath, { replace: true });
         } else {
           navigate("/dashboard", { replace: true });
         }
       } else {
-        setError(result.error || "รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง");
+        // Don't wrap the result in another object
+        console.log("Setting error state:", result);
+        setError(result);
+        setIsLoading(false); // Make sure to set loading to false before setting error
       }
-    } catch (error) {
-      setError(
-        error.response?.data?.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ"
-      );
-    } finally {
+    } catch (err) {
+      console.error("Login error:", err);
+      setError({
+        type: "error",
+        message: err.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
+      });
       setIsLoading(false);
     }
   };
+
+  console.log("Current error state:", error);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -64,15 +144,29 @@ function LoginPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
         <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-lg sm:px-10 border border-gray-100">
           {error && (
-            <div className="mb-6 p-4 rounded-lg bg-red-50 border-l-4 border-red-400">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <p className="ml-3 text-sm text-red-800">{error}</p>
+            <div
+              className={`mb-6 p-4 rounded-lg ${
+                error.type === "success"
+                  ? "bg-green-50 border-l-4 border-green-400"
+                  : "bg-red-50 border-l-4 border-red-400"
+              } flex items-center`}
+            >
+              <div
+                className={`flex items-center ${
+                  error.type === "success" ? "text-green-800" : "text-red-800"
+                }`}
+              >
+                {error.type === "success" ? (
+                  <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                )}
+                <span>{error.message}</span>
               </div>
             </div>
           )}
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             <div>
               <label
                 htmlFor="username"
@@ -91,10 +185,17 @@ function LoginPage() {
                   required
                   value={formData.username}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+                  className={`block w-full pl-10 pr-3 py-2 border ${
+                    fieldErrors.username ? "border-red-500" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200`}
                   placeholder="กรอกรหัสผู้ใช้"
                 />
               </div>
+              {fieldErrors.username && (
+                <p className="mt-1 text-sm text-red-600">
+                  {fieldErrors.username}
+                </p>
+              )}
             </div>
 
             <div>
@@ -115,7 +216,9 @@ function LoginPage() {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200"
+                  className={`block w-full pl-10 pr-10 py-2 border ${
+                    fieldErrors.password ? "border-red-500" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200`}
                   placeholder="กรอกรหัสผ่าน"
                 />
                 <button
@@ -130,6 +233,11 @@ function LoginPage() {
                   )}
                 </button>
               </div>
+              {fieldErrors.password && (
+                <p className="mt-1 text-sm text-red-600">
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
 
             <button
@@ -181,13 +289,12 @@ function LoginPage() {
             </div>
           </form>
 
-          {/* Test Account Information */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
             <h3 className="text-sm font-medium text-gray-700 mb-2">
               หากลืมรหัสผ่าน
             </h3>
             <div className="space-y-1 text-sm text-gray-600">
-              <p>โปรดติดต่อ 08x-xxx-xxxx</p>
+              <p>โปรดติดต่อ นักวิชาการสาขาเทคโนโลยีสารสนเทศ</p>
             </div>
           </div>
         </div>

@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Edit, Trash2, Search as SearchIcon } from "lucide-react";
+import { Edit, Trash2, Search as SearchIcon, Filter } from "lucide-react";
 import api from "../../utils/axios";
+import { useAuth } from "../../context/AuthContext";
 
 function EquipmentList({ onEdit }) {
+  const { user } = useAuth(); // Changed from user: currentUser to just user
+  const isEquipmentManager = user?.role === "equipment_manager";
   const [equipment, setEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredEquipment, setFilteredEquipment] = useState([]);
+
+  const [filters, setFilters] = useState({
+    status: [],
+    type: []
+  });
 
   const fetchEquipment = async () => {
     try {
@@ -31,24 +39,38 @@ function EquipmentList({ onEdit }) {
 
   useEffect(() => {
     const filtered = equipment.filter((item) => {
-
+      // Search filter
       const searchLower = searchQuery.toLowerCase();
       const equipmentId = item.equipment_id?.toLowerCase() || "";
-      const name = item.name?.toLowerCase() || ""; // Note: changed from item.name to item.equipment_name
+      const name = item.name?.toLowerCase() || "";
       const type = item.type?.toLowerCase() || "";
       const room = item.room?.toLowerCase() || "";
       const status = getStatusText(item.status)?.toLowerCase() || "";
 
-      return (
+      const matchesSearch =
         equipmentId.includes(searchLower) ||
         name.includes(searchLower) ||
         type.includes(searchLower) ||
         room.includes(searchLower) ||
-        status.includes(searchLower)
-      );
+        status.includes(searchLower);
+
+      // Status and Type filters
+      const matchesStatus =
+        filters.status.length === 0 || filters.status.includes(item.status);
+      const matchesType =
+        filters.type.length === 0 || filters.type.includes(item.type);
+
+      return matchesSearch && matchesStatus && matchesType;
     });
+
     setFilteredEquipment(filtered);
-  }, [searchQuery, equipment]);
+}, [searchQuery, equipment, filters]);
+
+  const STATUS_OPTIONS = [
+    { value: "active", label: "ใช้งานได้" },
+    { value: "maintenance", label: "ซ่อมบำรุง" },
+    { value: "inactive", label: "ไม่พร้อมใช้งาน" },
+  ];
 
   const handleDelete = async (id) => {
     if (window.confirm("คุณต้องการลบครุภัณฑ์นี้ใช่หรือไม่?")) {
@@ -135,6 +157,69 @@ function EquipmentList({ onEdit }) {
         {error && (
           <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
+          </div>
+        )}
+
+        {isEquipmentManager && (
+          <div className="bg-white p-4 rounded-lg shadow mb-6">
+            <div className="flex flex-wrap gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">สถานะ</label>
+                <div className="space-x-2">
+                  {STATUS_OPTIONS.map((status) => (
+                    <label
+                      key={status.value}
+                      className="inline-flex items-center"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.status.includes(status.value)}
+                        onChange={() => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            status: prev.status.includes(status.value)
+                              ? prev.status.filter((s) => s !== status.value)
+                              : [...prev.status, status.value],
+                          }));
+                        }}
+                        className="rounded border-gray-300 text-indigo-600"
+                      />
+                      <span className="ml-2 text-sm">{status.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">ประเภท</label>
+                <div className="space-x-2">
+                  {[
+                    { value: "Computer", label: "Computer" },
+                    { value: "Other", label: "Other" },
+                  ].map((type) => (
+                    <label
+                      key={type.value}
+                      className="inline-flex items-center"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.type.includes(type.value)}
+                        onChange={() => {
+                          setFilters((prev) => ({
+                            ...prev,
+                            type: prev.type.includes(type.value)
+                              ? prev.type.filter((t) => t !== type.value)
+                              : [...prev.type, type.value],
+                          }));
+                        }}
+                        className="rounded border-gray-300 text-indigo-600"
+                      />
+                      <span className="ml-2 text-sm">{type.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

@@ -13,6 +13,11 @@ const STATUS_OPTIONS = {
   inactive: "ไม่พร้อมใช้งาน",
 };
 
+const ROOM_OPTIONS = {
+  "BI Studio": "BI Studio",
+  "Co-Working": "Co-Working",
+};
+
 // Format equipment ID function
 const formatEquipmentId = (value) => {
   // Remove all spaces and convert to uppercase
@@ -53,8 +58,8 @@ const validateEquipment = (values) => {
     errors.type = "กรุณาเลือกประเภท";
   }
 
-  if (!values.room?.trim()) {
-    errors.room = "กรุณากรอกห้อง";
+  if (!values.room) {
+    errors.room = "กรุณาเลือกห้อง";
   }
 
   if (!values.status) {
@@ -241,15 +246,21 @@ function EquipmentForm({ equipment = null, onComplete }) {
             <label className="block text-sm font-medium text-gray-700">
               ห้อง
             </label>
-            <input
-              type="text"
+            <select
               name="room"
               value={formData.room}
               onChange={handleChange}
               className={`mt-1 block w-full rounded-md border ${
                 validationErrors.room ? "border-red-500" : "border-gray-300"
               } px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500`}
-            />
+            >
+              <option value="">เลือกห้อง</option>
+              {Object.entries(ROOM_OPTIONS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
             {validationErrors.room && (
               <p className="mt-1 text-sm text-red-600">
                 {validationErrors.room}

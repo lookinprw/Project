@@ -65,7 +65,6 @@ function UnfixableProblems() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 ผู้รับผิดชอบ
               </th>
-          
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -81,7 +80,7 @@ function UnfixableProblems() {
                   {problem.equipment_name}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {problem.room}
+                  {problem.equipment_room}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900">
                   {problem.description}

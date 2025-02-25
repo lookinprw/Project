@@ -15,9 +15,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const parsedUser = savedUser ? JSON.parse(savedUser) : null;
       if (parsedUser?.token) {
-        api.defaults.headers.common[
-          "Authorization"
-        ] = `Bearer ${parsedUser.token}`;
+        api.defaults.headers.common["Authorization"] = `Bearer ${parsedUser.token}`;
       }
       return parsedUser;
     } catch (error) {
@@ -30,12 +28,40 @@ export const AuthProvider = ({ children }) => {
   const [initialized, setInitialized] = useState(false);
 
   const logout = useCallback(() => {
-    setLoading(false);
     setUser(null);
-    localStorage.clear();
+    localStorage.removeItem("user");
     delete api.defaults.headers.common["Authorization"];
-    window.location.href = "/login";
   }, []);
+
+  const refreshUserData = useCallback(async () => {
+    try {
+      if (!user?.token) return false;
+
+      const response = await api.get("/users/me");
+      if (response.data.success) {
+        const userData = {
+          ...response.data.user,
+          token: response.data.token,
+          refreshToken: response.data.refreshToken,
+        };
+        localStorage.setItem("user", JSON.stringify(userData));
+        api.defaults.headers.common["Authorization"] = `Bearer ${userData.token}`;
+        setUser(userData);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+      if (error.response?.status === 401) {
+        const refreshed = await refreshToken();
+        if (refreshed) {
+          return await refreshUserData();
+        }
+      }
+      logout();
+      return false;
+    }
+  }, [user, logout]);
 
   const refreshToken = useCallback(async () => {
     try {
@@ -47,18 +73,17 @@ export const AuthProvider = ({ children }) => {
         refreshToken: user.refreshToken,
       });
 
-      if (response.data.success && response.data.token) {
-        const updatedUser = {
+      if (response.data.success) {
+        const userData = {
           ...user,
+          ...response.data.user,
           token: response.data.token,
-          refreshToken: response.data.refreshToken || user.refreshToken,
+          refreshToken: response.data.refreshToken,
         };
 
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        api.defaults.headers.common[
-          "Authorization"
-        ] = `Bearer ${response.data.token}`;
-        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(userData));
+        api.defaults.headers.common["Authorization"] = `Bearer ${response.data.token}`;
+        setUser(userData);
         return true;
       }
       return false;
@@ -69,60 +94,35 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user, logout]);
 
-  const refreshUserData = useCallback(async () => {
-    try {
-      if (!user?.token) return false;
-  
-      const response = await api.get('/users/validate');
-      if (response.data.success) {
-        // Update user data but keep tokens
-        const updatedUser = {
-          ...response.data.user,
-          token: user.token,
-          refreshToken: user.refreshToken
-        };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setUser(updatedUser);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error("Error validating user:", error);
-      if (error.response?.status === 401) {
-        const refreshed = await refreshToken();
-        if (refreshed) {
-          return await refreshUserData();
-        }
-      }
-      return false;
-    }
-  }, [user, refreshToken]);
-
   const login = async (credentials) => {
     try {
       setLoading(true);
       const response = await api.post("/users/login", credentials);
-  
+      
       if (response.data.success) {
         const userData = {
           ...response.data.user,
           token: response.data.token,
           refreshToken: response.data.refreshToken,
         };
-  
+
         api.defaults.headers.common["Authorization"] = `Bearer ${userData.token}`;
         localStorage.setItem("user", JSON.stringify(userData));
         setUser(userData);
-  
-        // Don't use window.location.href - use navigate instead
-        return { success: true, user: userData };
+        return response.data;
       }
-  
-      return { success: false, error: response.data.message };
-    } catch (error) {
+
       return {
         success: false,
-        error: error.response?.data?.message || "Error logging in",
+        type: "error",
+        message: response.data.message || "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      return {
+        success: false,
+        type: "error",
+        message: error.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง"
       };
     } finally {
       setLoading(false);
@@ -130,11 +130,27 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    if (!user || !initialized) return;
+
+    const refreshInterval = setInterval(() => {
+      refreshUserData();
+    }, 2 * 60 * 1000); // Check every 2 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [user, initialized, refreshUserData]);
+
+  useEffect(() => {
     const initialize = async () => {
       if (!user || initialized) return;
+      
       try {
         setLoading(true);
-        // Just validate the token instead of fetching user data
+        
+        if (window.location.pathname === '/login') {
+          setInitialized(true);
+          return;
+        }
+
         const isValid = await refreshUserData();
         if (!isValid) {
           logout();
@@ -147,7 +163,7 @@ export const AuthProvider = ({ children }) => {
         setInitialized(true);
       }
     };
-  
+
     initialize();
   }, [user, initialized, refreshUserData, logout]);
 
@@ -160,30 +176,23 @@ export const AuthProvider = ({ children }) => {
     refreshUserData,
     refreshToken,
     isAdmin: user?.role === "admin",
-    isStaff: ["admin", "equipment_manager", "equipment_assistant"].includes(
-      user?.role
-    ),
+    isStaff: ["admin", "equipment_manager", "equipment_assistant"].includes(user?.role),
   };
 
-  if (!user) {
-    return (
-      <AuthContext.Provider value={{ ...value, loading: false }}>
-        {children}
-      </AuthContext.Provider>
-    );
-  }
-
-  if (loading && !initialized) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ ...value, loading: loading || !initialized }}>
+      {loading && !initialized ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+        </div>
+      ) : (
+        children
+      )}
+    </AuthContext.Provider>
+  );
 };
 
+// Add the useAuth hook export
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

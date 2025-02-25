@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { AlertCircle } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import api from "../../utils/axios";
 
 export function StatusSelect({ problem, statuses = [], onStatusChange }) {
+  const { user } = useAuth();
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState("");
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -10,15 +12,33 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
   const [comment, setComment] = useState("");
   const [selectedId, setSelectedId] = useState(problem?.status_id);
 
+  // Filter statuses for equipment assistant
+  const filteredStatuses = statuses.filter(status => {
+    if (user?.role === "equipment_assistant") {
+      // Exclude status IDs 7 (กำลังส่งไปศูนย์คอม) and 8 (ชำรุดเสียหาย)
+      return ![7, 8].includes(status.id);
+    }
+    return true;
+  });
+
   const handleChange = (e) => {
     const statusId = parseInt(e.target.value);
-    if (statusId === 7) {
+    
+    // If not assigned and trying to change status
+    if (!problem.assigned_to && problem.status_id === 1) {
+      setError("กรุณารับงานก่อนเปลี่ยนสถานะ");
+      setSelectedId(problem.status_id);
+      return;
+    }
+
+    // Special status handling
+    if (statusId === 7) { // Computer Center
       setSelectedId(statusId);
       setShowWarningDialog(true);
       return;
     }
 
-    if (statusId === 4) {
+    if (statusId === 4) { // Cannot Fix
       setSelectedId(statusId);
       setShowCommentModal(true);
       return;
@@ -34,6 +54,11 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
   };
 
   const updateStatus = async (statusId, commentText = "") => {
+    if (!problem.assigned_to && problem.status_id === 1) {
+      setError("กรุณารับงานก่อนเปลี่ยนสถานะ");
+      return;
+    }
+
     setUpdating(true);
     setError("");
 
@@ -72,11 +97,15 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
       <select
         value={selectedId}
         onChange={handleChange}
-        disabled={updating}
-        className="mt-1 block w-40 rounded-md text-sm font-medium"
+        disabled={updating || (!problem.assigned_to && problem.status_id === 1)}
+        className={`mt-1 block w-40 rounded-md text-sm font-medium ${
+          !problem.assigned_to && problem.status_id === 1 
+            ? 'opacity-50 cursor-not-allowed' 
+            : ''
+        }`}
         style={{ backgroundColor: problem.status_color }}
       >
-        {statuses.map(status => (
+        {filteredStatuses.map(status => (
           <option 
             key={status.id}
             value={status.id}
@@ -87,7 +116,11 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
         ))}
       </select>
 
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && (
+        <p className="mt-1 text-xs text-red-600 bg-red-50 p-1 rounded">
+          {error}
+        </p>
+      )}
 
       {showWarningDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

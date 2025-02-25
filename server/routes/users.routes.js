@@ -8,7 +8,12 @@ const {
   generateRefreshToken,
 } = require("../middleware/auth");
 const bcrypt = require("bcrypt");
-const VALID_ROLES = ["admin", "equipment_manager", "equipment_assistant", "reporter"];
+const VALID_ROLES = [
+  "admin",
+  "equipment_manager",
+  "equipment_assistant",
+  "reporter",
+];
 
 const hashPassword = async (password) => {
   const saltRounds = 10;
@@ -44,90 +49,72 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-router.get("/validate", auth, async (req, res) => {
-  try {
-    // Since auth middleware already validates the token,
-    // if we reach here, the token is valid
-    const [user] = await db.execute(
-      "SELECT id, username, firstname, lastname, role, branch FROM users WHERE id = ?",
-      [req.user.id]
-    );
-
-    if (user.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found"
-      });
-    }
-
-    res.json({
-      success: true,
-      user: user[0]
-    });
-  } catch (error) {
-    console.error("Validation error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error validating user"
-    });
-  }
-});
-
-
-
-// Login route
 router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log("Login attempt for:", username);
 
+    // Input validation
     if (!username || !password) {
-      return res.status(400).json({
+      return res.status(400).send({
         success: false,
+        type: "error",
         message: "กรุณากรอกรหัสผู้ใช้และรหัสผ่าน",
       });
     }
 
-    const [users] = await db.execute("SELECT * FROM users WHERE username = ?", [
-      username,
-    ]);
+    // Find user
+    const [users] = await db.execute(
+      "SELECT * FROM users WHERE username = ?", 
+      [username]
+    );
 
+    // User not found
     if (users.length === 0) {
-      return res.status(401).json({
+      console.log("User not found:", username);
+      return res.status(200).send({
         success: false,
+        type: "error",
         message: "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
       });
     }
 
     const user = users[0];
-
-    // Try both methods - for compatibility during transition
     let passwordMatch = false;
 
-    // First try direct comparison (for old passwords)
-    if (password === user.password) {
-      passwordMatch = true;
-    } else {
-      // Then try bcrypt comparison (for new hashed passwords)
+    // Password verification
+    if (user.password.startsWith("$2")) {
       try {
         passwordMatch = await bcrypt.compare(password, user.password);
       } catch (error) {
-        // If bcrypt.compare fails, it means the stored password isn't a hash
+        console.error("Password compare error:", error);
         passwordMatch = false;
       }
+    } else {
+      passwordMatch = password === user.password;
     }
 
+    // Wrong password
     if (!passwordMatch) {
-      return res.status(401).json({
+      console.log("Invalid password for user:", username);
+      return res.status(200).send({
         success: false,
+        type: "error",
         message: "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
       });
     }
 
+    // Generate tokens
     const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
 
-    res.json({
+    // Success response
+    return res.status(200).send({
       success: true,
+      type: "success",
+      message: "เข้าสู่ระบบสำเร็จ",
       token: accessToken,
+      refreshToken: refreshToken,
       user: {
         id: user.id,
         username: user.username,
@@ -137,11 +124,13 @@ router.post("/login", async (req, res) => {
         branch: user.branch,
       },
     });
+
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({
+    return res.status(200).send({
       success: false,
-      message: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
+      type: "error",
+      message: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง",
     });
   }
 });
@@ -173,7 +162,6 @@ router.post("/register", async (req, res) => {
     }
 
     // Password length validation
-    
 
     // Hash the password before saving
     const hashedPassword = await hashPassword(password);
@@ -253,7 +241,7 @@ router.patch("/:id", auth, async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     const { id } = req.params;
     const { firstname, lastname, branch } = req.body;
 
@@ -290,15 +278,14 @@ router.patch("/:id", auth, async (req, res) => {
     res.json({
       success: true,
       message: "อัพเดทข้อมูลสำเร็จ",
-      user: updatedUser[0]
+      user: updatedUser[0],
     });
-
   } catch (error) {
     await connection.rollback();
     console.error("Error updating profile:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล"
+      message: error.message || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล",
     });
   } finally {
     connection.release();
@@ -385,6 +372,44 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
+router.get("/me", auth, async (req, res) => {
+  try {
+    const [users] = await db.execute(
+      `SELECT id, username, firstname, lastname, role, branch 
+       FROM users WHERE id = ?`,
+      [req.user.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบข้อมูลผู้ใช้"
+      });
+    }
+
+    const user = users[0];
+    
+    // Generate fresh tokens
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    res.json({
+      success: true,
+      user,
+      token: newAccessToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (error) {
+    console.error("Error fetching current user:", error);
+    res.status(500).json({
+      success: false,
+      message: "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"
+    });
+  }
+});
+
+// Replace your existing refresh-token endpoint with this one
+
 router.post("/refresh-token", async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -396,7 +421,7 @@ router.post("/refresh-token", async (req, res) => {
       });
     }
 
-    // First verify the refresh token
+    // Verify the refresh token
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
@@ -407,43 +432,38 @@ router.post("/refresh-token", async (req, res) => {
       });
     }
 
-    // Then verify it exists in database
+    // Get fresh user data
     const [users] = await db.execute(
-      "SELECT * FROM users WHERE refresh_token = ?",
-      [refreshToken]
+      `SELECT id, username, firstname, lastname, role, branch 
+       FROM users WHERE id = ?`,
+      [decoded.id]
     );
 
     if (users.length === 0) {
       return res.status(401).json({
         success: false,
-        message: "Invalid refresh token",
+        message: "User not found",
       });
     }
 
     const user = users[0];
 
-    // Verify user matches token
-    if (decoded.id !== user.id) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid refresh token",
-      });
-    }
-
     // Generate new tokens
     const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken(user);
-
-    // Update refresh token in database
-    await db.execute("UPDATE users SET refresh_token = ? WHERE id = ?", [
-      newRefreshToken,
-      user.id,
-    ]);
 
     res.json({
       success: true,
       token: newAccessToken,
       refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        role: user.role,
+        branch: user.branch
+      }
     });
   } catch (error) {
     console.error("Refresh token error:", error);
@@ -454,59 +474,77 @@ router.post("/refresh-token", async (req, res) => {
   }
 });
 
-router.post("/new", auth, checkRole(["admin", "equipment_manager"]), async (req, res) => {
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
+router.post(
+  "/new",
+  auth,
+  checkRole(["admin", "equipment_manager"]),
+  async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    const { username, password, firstname, lastname, branch, role } = req.body;
+      const { username, password, firstname, lastname, branch, role } =
+        req.body;
 
-    // Logging for debugging
-    console.log("Received user data:", { username, firstname, lastname, branch, role });
+      // Logging for debugging
+      console.log("Received user data:", {
+        username,
+        firstname,
+        lastname,
+        branch,
+        role,
+      });
 
-    // Better validation check
-    if (!username?.trim() || !password?.trim() || !firstname?.trim() || !lastname?.trim() || !branch?.trim() || !role?.trim()) {
-      throw new Error("กรุณากรอกข้อมูลให้ครบถ้วน");
+      // Better validation check
+      if (
+        !username?.trim() ||
+        !password?.trim() ||
+        !firstname?.trim() ||
+        !lastname?.trim() ||
+        !branch?.trim() ||
+        !role?.trim()
+      ) {
+        throw new Error("กรุณากรอกข้อมูลให้ครบถ้วน");
+      }
+
+      // Check existing user
+      const [existingUsers] = await connection.execute(
+        "SELECT id FROM users WHERE username = ?",
+        [username]
+      );
+
+      if (existingUsers.length > 0) {
+        throw new Error("รหัสผู้ใช้นี้มีในระบบแล้ว");
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Insert user
+      const [result] = await connection.execute(
+        "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
+        [username, hashedPassword, firstname, lastname, role, branch]
+      );
+
+      await connection.commit();
+
+      res.status(201).json({
+        success: true,
+        message: "เพิ่มผู้ใช้สำเร็จ",
+        userId: result.insertId,
+      });
+    } catch (error) {
+      await connection.rollback();
+      console.error("Error creating user:", error);
+      res.status(400).json({
+        success: false,
+        message: error.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้",
+      });
+    } finally {
+      connection.release();
     }
-
-    // Check existing user
-    const [existingUsers] = await connection.execute(
-      "SELECT id FROM users WHERE username = ?",
-      [username]
-    );
-
-    if (existingUsers.length > 0) {
-      throw new Error("รหัสผู้ใช้นี้มีในระบบแล้ว");
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert user
-    const [result] = await connection.execute(
-      "INSERT INTO users (username, password, firstname, lastname, role, branch) VALUES (?, ?, ?, ?, ?, ?)",
-      [username, hashedPassword, firstname, lastname, role, branch]
-    );
-
-    await connection.commit();
-
-    res.status(201).json({
-      success: true,
-      message: "เพิ่มผู้ใช้สำเร็จ",
-      userId: result.insertId
-    });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error("Error creating user:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้"
-    });
-  } finally {
-    connection.release();
   }
-});
+);
 
 router.post(
   "/admin-reset-password",
@@ -557,22 +595,22 @@ router.post("/change-password", auth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const [rows] = await connection.execute(
-      "SELECT * FROM users WHERE id = ?", 
+      "SELECT * FROM users WHERE id = ?",
       [req.user.id]
     );
 
     if (rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "ไม่พบผู้ใช้งาน"
+        message: "ไม่พบผู้ใช้งาน",
       });
     }
 
     const user = rows[0];
-    
+
     // Check if password is plain text or hashed
     let isValid;
-    if (user.password.startsWith('$2')) {
+    if (user.password.startsWith("$2")) {
       // Password is hashed with bcrypt
       isValid = await bcrypt.compare(currentPassword, user.password);
     } else {
@@ -583,27 +621,27 @@ router.post("/change-password", auth, async (req, res) => {
     if (!isValid) {
       return res.status(400).json({
         success: false,
-        message: "รหัสผ่านปัจจุบันไม่ถูกต้อง"
+        message: "รหัสผ่านปัจจุบันไม่ถูกต้อง",
       });
     }
 
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    await connection.execute(
-      "UPDATE users SET password = ? WHERE id = ?",
-      [hashedPassword, req.user.id]
-    );
+
+    await connection.execute("UPDATE users SET password = ? WHERE id = ?", [
+      hashedPassword,
+      req.user.id,
+    ]);
 
     res.json({
       success: true,
-      message: "เปลี่ยนรหัสผ่านสำเร็จ"
+      message: "เปลี่ยนรหัสผ่านสำเร็จ",
     });
   } catch (error) {
-    console.error('Password change error:', error);
+    console.error("Password change error:", error);
     res.status(500).json({
       success: false,
-      message: "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน"
+      message: "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน",
     });
   } finally {
     connection.release();

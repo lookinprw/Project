@@ -34,7 +34,7 @@ function ProblemAnalyticsPage() {
 
   const getRoomStats = () => {
     const stats = problems.reduce((acc, problem) => {
-      acc[problem.room] = (acc[problem.room] || 0) + 1;
+      acc[problem.equipment_room] = (acc[problem.equipment_room] || 0) + 1;
       return acc;
     }, {});
 
@@ -256,7 +256,7 @@ function ProblemAnalyticsPage() {
                   </td>
                   <td className="px-6 py-4 text-sm">{problem.equipment_name}</td>
                   <td className="px-6 py-4 text-sm">{problem.equipment_id}</td>
-                  <td className="px-6 py-4 text-sm">{problem.room}</td>
+                  <td className="px-6 py-4 text-sm">{problem.equipment_room}</td>
                   <td className="px-6 py-4 text-sm">{problem.description}</td>
                   <td className="px-6 py-4 text-sm">
                     {problem.problem_type === "hardware"

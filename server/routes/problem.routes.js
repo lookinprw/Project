@@ -54,6 +54,7 @@ router.get("/", auth, async (req, res) => {
              e.name as equipment_name,   
              e.equipment_id,             
              e.status as equipment_status,
+             e.room as equipment_room, 
              s.name as status_name,
              s.color as status_color,
              CONCAT(u.firstname, ' ', u.lastname) as reporter_name,
@@ -118,16 +119,14 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
         status_id, 
         image_url, 
         reported_by, 
-        room,
         problem_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
       [
         equipment_id,
         description,
         defaultStatus[0].id,
         req.file?.filename || null,
         reported_by,
-        equipment[0]?.room || null,
         problem_type,
       ]
     );
@@ -356,10 +355,31 @@ router.get(
        WHERE status_id = 4`
       );
 
+      // PDF Constants
+      const pageWidth = 842; // A4 landscape width
+      const pageHeight = 595; // A4 landscape height
+      const totalTableWidth = 750; // Total width of table
+      const margin = (pageWidth - totalTableWidth) / 2; // Center margin
+      const tableTop = 120;
+      const rowHeight = 30;
+
+      // Column definitions with centered positioning
+      const columns = [
+        { x: margin, width: 40, title: "ลำดับ" },
+        { x: margin + 40, width: 110, title: "รหัสครุภัณฑ์" },
+        { x: margin + 150, width: 120, title: "ชื่ออุปกรณ์" },
+        { x: margin + 270, width: 80, title: "ห้อง" },
+        { x: margin + 350, width: 120, title: "ปัญหา" },
+        { x: margin + 470, width: 120, title: "เหตุผล" },
+        { x: margin + 590, width: 80, title: "ผู้แจ้ง" },
+        { x: margin + 670, width: 80, title: "ผู้รับผิดชอบ" },
+      ];
+
       // Generate PDF
       const doc = new PDFDocument({
         size: "A4",
-        margin: 50,
+        layout: "landscape",
+        margin: margin,
       });
 
       doc.registerFont(
@@ -368,6 +388,7 @@ router.get(
       );
       doc.font("Sarabun");
 
+      // Set response headers
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
@@ -375,162 +396,186 @@ router.get(
       );
       doc.pipe(res);
 
-      // Header
-      doc
-        .fontSize(20)
-        .text("รายงานครุภัณฑ์ที่ไม่สามารถซ่อมได้", { align: "center" })
-        .moveDown();
+      // Function to draw table header
+      const drawTableHeader = (y) => {
+        doc.lineWidth(1);
+
+        // Header background
+        doc
+          .fillColor("#f3f4f6")
+          .rect(margin, y, totalTableWidth, rowHeight)
+          .fill()
+          .fillColor("#000000");
+
+        // Column titles
+        columns.forEach((col) => {
+          doc.fontSize(10).text(col.title, col.x + 2, y + 8, {
+            width: col.width - 4,
+            align: "center",
+            lineGap: 0,
+          });
+        });
+
+        // Vertical lines
+        columns.forEach((col) => {
+          doc
+            .moveTo(col.x, y)
+            .lineTo(col.x, y + rowHeight)
+            .stroke();
+        });
+
+        // Last vertical line
+        doc
+          .moveTo(margin + totalTableWidth, y)
+          .lineTo(margin + totalTableWidth, y + rowHeight)
+          .stroke();
+
+        // Horizontal lines
+        doc
+          .moveTo(margin, y)
+          .lineTo(margin + totalTableWidth, y)
+          .stroke()
+          .moveTo(margin, y + rowHeight)
+          .lineTo(margin + totalTableWidth, y + rowHeight)
+          .stroke();
+      };
+
+      // Draw title and date
+      doc.fontSize(20).text("รายงานครุภัณฑ์ที่ไม่สามารถซ่อมได้", 0, 40, {
+        align: "center",
+        width: pageWidth,
+      });
 
       doc
         .fontSize(12)
-        .text(`วันที่พิมพ์: ${new Date().toLocaleDateString("th-TH")}`, {
+        .text(`วันที่พิมพ์: ${new Date().toLocaleDateString("th-TH")}`, 0, 70, {
           align: "right",
-        })
-        .moveDown(2);
-
-      // Table setup
-      const tableTop = 150;
-      const tableLeft = 50;
-      const tableRight = 550;
-      const rowHeight = 40;
-      doc.fontSize(8);
-
-      // Draw table borders
-      doc.lineWidth(1);
-      doc.rect(tableLeft, tableTop, tableRight - tableLeft, rowHeight).stroke();
-      doc
-        .fillColor("#f3f4f6")
-        .rect(tableLeft, tableTop, tableRight - tableLeft, rowHeight)
-        .fill();
-      doc.fillColor("#000000");
-
-      const columns = [
-        { x: 50, width: 40, title: "ลำดับ" },
-        { x: 90, width: 90, title: "รหัสครุภัณฑ์" },
-        { x: 180, width: 90, title: "ชื่ออุปกรณ์" },
-        { x: 270, width: 50, title: "ห้อง" },
-        { x: 320, width: 80, title: "ปัญหา" },
-        { x: 400, width: 80, title: "เหตุผล" },
-        { x: 480, width: 35, title: "ผู้แจ้ง" },
-        { x: 515, width: 35, title: "ผู้รับผิดชอบ" },
-      ];
-
-      // Draw column headers
-      columns.forEach((col) => {
-        doc
-          .moveTo(col.x, tableTop)
-          .lineTo(col.x, tableTop + rowHeight * (problems.length + 1))
-          .stroke();
-
-        doc.fontSize(10).text(col.title, col.x + 5, tableTop + 10, {
-          width: col.width - 10,
-          align: "center",
+          width: pageWidth - margin,
         });
-      });
 
-      // Draw data rows
-      let y = tableTop + rowHeight;
+      // Initialize pagination
+      let currentPage = 1;
+      let y = tableTop;
 
+      // Draw initial header
+      drawTableHeader(y);
+      y += rowHeight;
+
+      // Draw rows
       problems.forEach((problem, index) => {
-        if (y > 680) {
-          doc.addPage();
-          y = 50;
-          doc.rect(tableLeft, y, tableRight - tableLeft, rowHeight).stroke();
-          columns.forEach((col) => {
-            doc.text(col.title, col.x + 2, y + 5, {
-              width: col.width - 4,
-              align: "center",
-              lineGap: 2,
-            });
-          });
+        // New page check
+        if (y > pageHeight - margin - rowHeight) {
+          doc.addPage({ size: "A4", layout: "landscape", margin: margin });
+          currentPage++;
+          y = tableTop;
+          drawTableHeader(y);
           y += rowHeight;
         }
-      
-        doc.rect(tableLeft, y, tableRight - tableLeft, rowHeight).stroke();
 
+        // Row background
         doc
-          .fontSize(8)
-          .text(String(index + 1), columns[0].x + 2, y + 5, {
-            width: columns[0].width - 4,
-            align: "center",
-            lineGap: 2,
-          })
-          .text(problem.equipment_id || "", columns[1].x + 2, y + 5, {
-            width: columns[1].width - 4,
-            lineGap: 2,
-          })
-          .text(problem.equipment_name || "", columns[2].x + 2, y + 5, {
-            width: columns[2].width - 4,
-            lineGap: 2,
-          })
-          .text(problem.equipment_room || "", columns[3].x + 2, y + 5, {
-            width: columns[3].width - 4,
-            align: "center",
-            lineGap: 2,
-          })
-          .text(problem.description || "", columns[4].x + 2, y + 5, {
-            width: columns[4].width - 4,
-            lineGap: 2,
-          })
-          .text(problem.comment || "", columns[5].x + 2, y + 5, {
-            width: columns[5].width - 4,
-            lineGap: 2,
-          })
-          .text(problem.reporter_name || "", columns[6].x + 2, y + 5, {
-            width: columns[6].width - 4,
-            align: "center",
-            lineGap: 2,
-          })
-          .text(problem.assigned_to_name || "-", columns[7].x + 2, y + 5, {
-            width: columns[7].width - 4,
-            align: "center",
-            lineGap: 2,
-          });
+          .fillColor(index % 2 === 0 ? "#ffffff" : "#f9fafb")
+          .rect(margin, y, totalTableWidth, rowHeight)
+          .fill()
+          .fillColor("#000000");
+
+        // Vertical lines
+        columns.forEach((col) => {
+          doc
+            .moveTo(col.x, y)
+            .lineTo(col.x, y + rowHeight)
+            .stroke();
+        });
+
+        // Last vertical line
+        doc
+          .moveTo(margin + totalTableWidth, y)
+          .lineTo(margin + totalTableWidth, y + rowHeight)
+          .stroke();
+
+        // Draw data
+        doc.fontSize(8);
+
+        // Index
+        doc.text(String(index + 1), columns[0].x + 2, y + 8, {
+          width: columns[0].width - 4,
+          align: "center",
+        });
+
+        // Equipment ID
+        doc.text(problem.equipment_id || "", columns[1].x + 2, y + 8, {
+          width: columns[1].width - 4,
+          align: "left",
+        });
+
+        // Equipment name
+        doc.text(problem.equipment_name || "", columns[2].x + 2, y + 8, {
+          width: columns[2].width - 4,
+          align: "left",
+        });
+
+        // Room
+        doc.text(problem.equipment_room || "", columns[3].x + 2, y + 8, {
+          width: columns[3].width - 4,
+          align: "center",
+        });
+
+        // Problem description
+        doc.text(problem.description || "", columns[4].x + 2, y + 8, {
+          width: columns[4].width - 4,
+          align: "left",
+        });
+
+        // Comment
+        doc.text(problem.comment || "", columns[5].x + 2, y + 8, {
+          width: columns[5].width - 4,
+          align: "left",
+        });
+
+        // Reporter
+        doc.text(problem.reporter_name || "", columns[6].x + 2, y + 8, {
+          width: columns[6].width - 4,
+          align: "center",
+        });
+
+        // Assignee
+        doc.text(problem.assigned_to_name || "-", columns[7].x + 2, y + 8, {
+          width: columns[7].width - 4,
+          align: "center",
+        });
+
+        // Bottom line of row
+        doc
+          .moveTo(margin, y + rowHeight)
+          .lineTo(margin + totalTableWidth, y + rowHeight)
+          .stroke();
 
         y += rowHeight;
       });
 
-      // Draw final table border
-      doc.moveTo(tableRight, tableTop).lineTo(tableRight, y).stroke();
+      // Page numbers
+      let pages = currentPage;
+      for (let i = 1; i <= pages; i++) {
+        doc.switchToPage(i - 1);
+        doc
+          .fontSize(8)
+          .text(`หน้า ${i} จาก ${pages}`, 0, pageHeight - margin - 15, {
+            align: "right",
+            width: pageWidth - margin,
+          });
+      }
 
-      const signY = y + 50;
-
-      // Signatures
-      doc
-        .fontSize(10)
-        .text(
-          "ลงชื่อ.......................................................",
-          100,
-          signY
-        )
-        .text(
-          "(.........................................................)",
-          100,
-          signY + 25
-        )
-        .text("ผู้จัดการครุภัณฑ์", 120, signY + 50);
-
-      doc
-        .text(
-          "ลงชื่อ.......................................................",
-          350,
-          signY
-        )
-        .text(
-          "(.........................................................)",
-          350,
-          signY + 25
-        )
-        .text("หัวหน้าศูนย์นวัตกรรมดิจิทัล", 360, signY + 50)
-        .text("ศูนย์นวัตกรรมดิจิทัล", 370, signY + 75)
-        .text("มหาวิทยาลัยวลัยลักษณ์", 365, signY + 100);
-
+      // Finalize PDF
       doc.end();
       await connection.commit();
     } catch (error) {
       await connection.rollback();
       console.error("Error:", error);
-      res.status(500).json({ success: false, message: "Error generating PDF" });
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json({ success: false, message: "Error generating PDF" });
+      }
     } finally {
       connection.release();
     }

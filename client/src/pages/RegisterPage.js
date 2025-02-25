@@ -8,12 +8,12 @@ import {
   Lock,
   AlertCircle,
   UserCircle,
+  CheckCircle,
 } from "lucide-react";
 import api from "../utils/axios";
 import Logo from "../assets/logo.png";
 
 function RegisterPage() {
-  // State declarations stay at the top
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: "",
@@ -24,47 +24,57 @@ function RegisterPage() {
     confirmPassword: "",
   });
 
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // Define validateForm at component level
   const validateForm = () => {
     const newErrors = {};
-  
+
+    // Validate username
+    const reservedUsernames = ["admin", "support"];
+
     // Validate username
     if (!formData.username) {
       newErrors.username = "กรุณากรอกรหัสผู้ใช้";
-    } else if (formData.username.length < 8) {  // Change from !== to <
-      newErrors.username = "รหัสผู้ใช้ต้องมีความยาวอย่างน้อย 8 ตัวอักษร";  // Fix typo in error message
+    } else if (reservedUsernames.includes(formData.username.toLowerCase())) {
+      newErrors.username = "ไม่สามารถใช้ชื่อผู้ใช้นี้ได้";
+    } else if (formData.username.includes(" ")) {
+      newErrors.username = "รหัสผู้ใช้ต้องไม่มีช่องว่าง";
+    } else if (formData.username.length < 8) {
+      newErrors.username = "รหัสผู้ใช้ต้องมีความยาวอย่างน้อย 8 ตัวอักษร";
     }
-  
-    // Rest of your validation remains the same
+
+    // Validate firstname
     if (!formData.firstname.trim()) {
       newErrors.firstname = "กรุณากรอกชื่อ";
     }
-  
+
+    // Validate lastname
     if (!formData.lastname.trim()) {
       newErrors.lastname = "กรุณากรอกนามสกุล";
     }
-  
+
+    // Validate password
     if (!formData.password) {
       newErrors.password = "กรุณากรอกรหัสผ่าน";
     } else if (formData.password.length < 6) {
       newErrors.password = "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร";
     }
-  
-    if (formData.password !== formData.confirmPassword) {
+
+    // Validate confirm password
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = "กรุณายืนยันรหัสผ่าน";
+    } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "รหัสผ่านไม่ตรงกัน";
     }
-  
+
     setFieldErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Define handleSubmit at component level
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -73,7 +83,7 @@ function RegisterPage() {
     }
 
     setLoading(true);
-    setError("");
+    setError(null);
 
     try {
       const response = await api.post("/users/register", {
@@ -85,38 +95,53 @@ function RegisterPage() {
       });
 
       if (response.data.success) {
-        navigate("/login", {
-          state: {
-            message: "ลงทะเบียนสำเร็จ กรุณาเข้าสู่ระบบ",
-            type: "success",
-          },
+        setError({
+          type: "success",
+          message: "สมัครสมาชิกสำเร็จ",
+        });
+
+        setTimeout(() => {
+          navigate("/login", {
+            state: {
+              message: "ลงทะเบียนสำเร็จ กรุณาเข้าสู่ระบบ",
+              type: "success",
+            },
+          });
+        }, 2000);
+      }
+    } catch (err) {
+      console.error("Registration error:", err);
+      // Handle specific error cases
+      if (err.response?.data?.error === "username_exists") {
+        setError({
+          type: "error",
+          message: "รหัสผู้ใช้นี้มีผู้ใช้งานแล้ว กรุณาใช้รหัสผู้ใช้อื่น",
+        });
+      } else {
+        setError({
+          type: "error",
+          message:
+            err.response?.data?.message ||
+            "เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่อีกครั้ง",
         });
       }
-    } catch (error) {
-      console.error("Registration error:", error);
-      setError(
-        error.response?.data?.message ||
-          "เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่อีกครั้ง"
-      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleChange = (e) => {
-    const fieldName = e.target.name;
-    const value = e.target.value;
-
-    // Remove this special handling for username
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [fieldName]: value,
+      [name]: value,
     }));
 
-    if (fieldErrors[fieldName]) {
+    // Clear field-specific error when user starts typing
+    if (fieldErrors[name]) {
       setFieldErrors((prev) => ({
         ...prev,
-        [fieldName]: "",
+        [name]: "",
       }));
     }
   };
@@ -139,10 +164,24 @@ function RegisterPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
         <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-lg sm:px-10 border border-gray-100">
           {error && (
-            <div className="mb-6 p-4 rounded-lg bg-red-50 border-l-4 border-red-400">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <p className="ml-3 text-sm text-red-800">{error}</p>
+            <div
+              className={`mb-6 p-4 rounded-lg ${
+                error.type === "success"
+                  ? "bg-green-50 border-l-4 border-green-400"
+                  : "bg-red-50 border-l-4 border-red-400"
+              } flex items-center`}
+            >
+              <div
+                className={`flex items-center ${
+                  error.type === "success" ? "text-green-800" : "text-red-800"
+                }`}
+              >
+                {error.type === "success" ? (
+                  <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                )}
+                {error.message}
               </div>
             </div>
           )}

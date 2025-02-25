@@ -58,7 +58,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     {
       path: "/computer-center",
       icon: <Monitor size={20} />,
-      text: "ปรับสถานะรายการที่ส่งซ่อม",
+      text: "รายการส่งซ่อมศูนย์คอมพิวเตอร์",
       show: isEquipManager
     },
   

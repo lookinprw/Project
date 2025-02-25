@@ -13,11 +13,20 @@ function UserList() {
   const [updating, setUpdating] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(null);
 
+  // Updated role options with your desired order
   const ROLE_OPTIONS = {
-    admin: "ผู้ดูแลระบบ",
     reporter: "ผู้แจ้งปัญหา",
-    equipment_manager: "ผู้จัดการครุภัณฑ์",
     equipment_assistant: "ผู้ช่วยดูแลครุภัณฑ์",
+    equipment_manager: "ผู้จัดการครุภัณฑ์",
+    admin: "ผู้ดูแลระบบ",
+  };
+
+  // Role priority for sorting (lower number = higher in list)
+  const ROLE_PRIORITY = {
+    reporter: 1,
+    equipment_assistant: 2,
+    equipment_manager: 3,
+    admin: 4,
   };
 
   const getAvailableRoles = (currentUserRole) => {
@@ -25,7 +34,7 @@ function UserList() {
       return ROLE_OPTIONS;
     } else if (currentUserRole === "equipment_manager") {
       return {
-        student: ROLE_OPTIONS.reporter,
+        reporter: ROLE_OPTIONS.reporter,
         equipment_assistant: ROLE_OPTIONS.equipment_assistant,
       };
     }
@@ -83,7 +92,12 @@ function UserList() {
       );
     });
 
-    setFilteredUsers(filtered);
+    // Sort filtered users by role priority
+    const sortedFiltered = [...filtered].sort((a, b) => {
+      return (ROLE_PRIORITY[a.role] || 99) - (ROLE_PRIORITY[b.role] || 99);
+    });
+
+    setFilteredUsers(sortedFiltered);
   }, [searchQuery, users]);
 
   const fetchUsers = async () => {
@@ -91,8 +105,12 @@ function UserList() {
       setLoading(true);
       const response = await api.get("/users");
       if (response.data.success) {
-        setUsers(response.data.data);
-        setFilteredUsers(response.data.data);
+        // Sort users by role priority when they are fetched
+        const sortedUsers = [...response.data.data].sort((a, b) => {
+          return (ROLE_PRIORITY[a.role] || 99) - (ROLE_PRIORITY[b.role] || 99);
+        });
+        setUsers(sortedUsers);
+        setFilteredUsers(sortedUsers);
       }
     } catch (err) {
       console.error("Error fetching users:", err);

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { Trash2, Edit, Plus } from "lucide-react";
+import { Trash2, Edit } from "lucide-react";
 import api from "../utils/axios";
+
+// Define the IDs of original statuses that cannot be deleted
+const LOCKED_STATUS_IDS = [1, 2, 3, 4, 7, 8];
 
 function StatusPage() {
   const [statuses, setStatuses] = useState([]);
@@ -46,6 +49,11 @@ function StatusPage() {
   };
 
   const handleDelete = async (id) => {
+    if (LOCKED_STATUS_IDS.includes(id)) {
+      setError("ไม่สามารถลบสถานะเริ่มต้นได้");
+      return;
+    }
+
     if (window.confirm("ยืนยันการลบสถานะ?")) {
       try {
         await api.delete(`/status/${id}`);
@@ -187,12 +195,14 @@ function StatusPage() {
                     >
                       <Edit size={18} />
                     </button>
-                    <button
-                      onClick={() => handleDelete(status.id)}
-                      className="p-2 text-gray-600 hover:text-red-600"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {!LOCKED_STATUS_IDS.includes(status.id) && (
+                      <button
+                        onClick={() => handleDelete(status.id)}
+                        className="p-2 text-gray-600 hover:text-red-600"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

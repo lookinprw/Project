@@ -1,12 +1,10 @@
 // pages/ComputerCenterPage.js
 import React, { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { AlertCircle, Check, X } from "lucide-react";
+import { AlertCircle} from "lucide-react";
 import api from "../utils/axios";
 
 function ComputerCenterPage() {
-  const { user: currentUser } = useAuth();
   const [problems, setProblems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,28 +39,23 @@ function ComputerCenterPage() {
   };
 
   // Handle bulk status update
-  const handleBulkStatusUpdate = async (statusName) => {
+  const handleBulkStatusUpdate = async (statusId) => {
     if (selectedProblems.length === 0) {
       setError("กรุณาเลือกรายการที่ต้องการอัพเดทสถานะ");
       return;
     }
-
-    const statusMap = {
-      damaged: 8,
-      resolved: 3,
+  
+    const statusMessages = {
+      8: "ชำรุดเสียหาย",
+      3: "เสร็จสิ้น",
     };
-
-    const statusId = statusMap[statusName];
-    if (!statusId) {
+  
+    const confirmMessage = statusMessages[statusId];
+    if (!confirmMessage) {
       setError("ไม่พบสถานะที่ต้องการ");
       return;
     }
-
-    const confirmMessage = {
-      damaged: "ชำรุดเสียหาย",
-      resolved: "เสร็จสิ้น",
-    }[statusName];
-
+  
     if (
       !window.confirm(
         `ยืนยันการเปลี่ยนสถานะเป็น ${confirmMessage} จำนวน ${selectedProblems.length} รายการ?`
@@ -70,11 +63,11 @@ function ComputerCenterPage() {
     ) {
       return;
     }
-
+  
     try {
       setUpdating(true);
       setError("");
-
+  
       await Promise.all(
         selectedProblems.map((problemId) =>
           api.patch(`/problems/${problemId}/status`, {
@@ -83,7 +76,7 @@ function ComputerCenterPage() {
           })
         )
       );
-
+  
       setSelectedProblems([]);
       await fetchData();
     } catch (err) {
@@ -145,14 +138,14 @@ function ComputerCenterPage() {
           {problems.length > 0 && (
             <div className="space-x-4">
               <button
-                onClick={() => handleBulkStatusUpdate("ชำรุดเสียหาย")}
+                onClick={() => handleBulkStatusUpdate(8)}
                 disabled={updating || selectedProblems.length === 0}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 ชำรุดเสียหาย
               </button>
               <button
-                onClick={() => handleBulkStatusUpdate("เสร็จสิ")}
+                onClick={() => handleBulkStatusUpdate(3)}
                 disabled={updating || selectedProblems.length === 0}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
@@ -222,7 +215,7 @@ function ComputerCenterPage() {
                     {problem.equipment_id}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {problem.room}
+                    {problem.equipment_room}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {problem.description}

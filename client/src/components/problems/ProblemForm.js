@@ -63,7 +63,7 @@ function ProblemForm({ onClose }) {
 
       const query = searchQuery.toLowerCase();
       const equipmentId = String(eq.equipment_id || "").toLowerCase();
-      const name = String(eq.equipment_name || "").toLowerCase();
+      const name = String(eq.name || "").toLowerCase();
       const room = String(eq.room || "").toLowerCase();
 
       return (
@@ -152,7 +152,9 @@ function ProblemForm({ onClose }) {
     try {
       const activeStatusIds = [1, 2, 7]; // Pending, In Progress, Computer Center
       const response = await api.get(
-        `/problems/similar/${equipment_id}/${problem_type}?statuses=${activeStatusIds.join(',')}`
+        `/problems/similar/${equipment_id}/${problem_type}?statuses=${activeStatusIds.join(
+          ","
+        )}`
       );
       if (response.data.problems?.length > 0) {
         setSimilarProblems(response.data.problems);
@@ -253,10 +255,12 @@ function ProblemForm({ onClose }) {
               <div className="flex justify-between items-start mb-2">
                 <p className="font-medium">{problem.equipment_name}</p>
                 <p className="text-sm text-gray-500">
-                  {new Date(problem.created_at).toLocaleDateString('th-TH')}
+                  {new Date(problem.created_at).toLocaleDateString("th-TH")}
                 </p>
               </div>
-              <p className="text-sm text-gray-600 mb-2">{problem.description}</p>
+              <p className="text-sm text-gray-600 mb-2">
+                {problem.description}
+              </p>
               <div className="flex justify-between items-center">
                 <p className="text-sm text-gray-500">
                   แจ้งโดย: {problem.firstname} {problem.lastname}
@@ -285,11 +289,11 @@ function ProblemForm({ onClose }) {
               formDataToSend.append("equipment_id", formData.equipment_id);
               formDataToSend.append("description", formData.description);
               formDataToSend.append("problem_type", formData.problem_type);
-  
+
               if (file) {
                 formDataToSend.append("image", file);
               }
-  
+
               setIsSubmitting(true);
               try {
                 const response = await api.post("/problems", formDataToSend, {
@@ -297,12 +301,15 @@ function ProblemForm({ onClose }) {
                     "Content-Type": "multipart/form-data",
                   },
                 });
-  
+
                 if (response.data.success) {
                   onClose();
                 }
               } catch (error) {
-                setError(error.response?.data?.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+                setError(
+                  error.response?.data?.message ||
+                    "เกิดข้อผิดพลาดในการส่งข้อมูล"
+                );
               } finally {
                 setIsSubmitting(false);
               }
@@ -406,7 +413,7 @@ function ProblemForm({ onClose }) {
         {/* Description - Optional */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            รายละเอียดเพิ่มเติม 
+            รายละเอียดเพิ่มเติม
           </label>
           <textarea
             name="description"

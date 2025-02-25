@@ -3,8 +3,8 @@ import axios from "axios";
 
 class AuthAPI {
   constructor() {
-    const baseURL = process.env.REACT_APP_API_URL || "http://localhost:3001/api";
-    console.log('API baseURL:', baseURL);
+    const baseURL =
+      process.env.REACT_APP_API_URL || "http://localhost:3001/api";
 
     this.api = axios.create({
       baseURL,
@@ -12,106 +12,58 @@ class AuthAPI {
         "Content-Type": "application/json",
       },
       withCredentials: true,
-      crossDomain: true
+      crossDomain: true,
     });
-  
 
-    this.isRefreshing = false;
-    this.failedQueue = [];
-
+    // Request interceptor
     this.api.interceptors.request.use(
       (config) => {
         const user = this.getCurrentUser();
         if (user?.token) {
-          // Make sure token is properly formatted
           const token = user.token.startsWith("Bearer ")
             ? user.token
             : `Bearer ${user.token}`;
-
           config.headers.Authorization = token;
-          console.log(
-            "Setting Authorization header:",
-            token.substring(0, 20) + "..."
-          );
-        } else {
-          console.log("No token found in user data");
         }
         return config;
       },
       (error) => Promise.reject(error)
     );
 
+    // Response interceptor
     this.api.interceptors.response.use(
       (response) => response,
       async (error) => {
-        const originalRequest = error.config;
-        console.log("Response error:", error.response?.status);
-
-        // Only try refresh if 401 and not already retrying
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          if (this.isRefreshing) {
-            return new Promise((resolve, reject) => {
-              this.failedQueue.push({ resolve, reject });
-            })
-              .then((token) => {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return this.api(originalRequest);
-              })
-              .catch((err) => Promise.reject(err));
-          }
-
-          originalRequest._retry = true;
-          this.isRefreshing = true;
-
-          try {
-            const user = this.getCurrentUser();
-            console.log("Refreshing token for user:", user?.id);
-
-            if (!user?.refreshToken) {
-              throw new Error("No refresh token available");
-            }
-
-            const refreshResponse = await axios.post(
-              `${this.api.defaults.baseURL}/users/refresh-token`,
-              { refreshToken: user.refreshToken },
-              { skipAuthRefresh: true } // Skip interceptor for this request
-            );
-
-            if (refreshResponse.data.success) {
-              const { token: newToken, refreshToken: newRefreshToken } =
-                refreshResponse.data;
-
-              // Update user in localStorage
-              const updatedUser = {
-                ...user,
-                token: newToken,
-                refreshToken: newRefreshToken,
-              };
-              localStorage.setItem("user", JSON.stringify(updatedUser));
-
-              // Update headers
-              this.api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-
-              // Process queue
-              this.failedQueue.forEach((prom) => prom.resolve(newToken));
-              this.failedQueue = [];
-
-              return this.api(originalRequest);
-            } else {
-              throw new Error("Token refresh failed");
-            }
-          } catch (error) {
-            this.failedQueue.forEach((prom) => prom.reject(error));
-            this.failedQueue = [];
-            this.clearAuth();
-            throw error;
-          } finally {
-            this.isRefreshing = false;
-          }
+        console.log('API Error:', error.response?.data); // Add debug log
+    
+        // For login endpoint errors
+        if (error.config.url.includes('/login')) {
+          const errorData = {
+            success: false,
+            type: "error",
+            message: error.response?.data?.message || "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
+          };
+          console.log('Login error formatted:', errorData); // Add debug log
+          return Promise.reject(errorData);
         }
-
-        return Promise.reject(error);
+    
+        // Network errors (no response)
+        if (!error.response) {
+          const networkError = {
+            success: false,
+            type: "error",
+            message: "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง"
+          };
+          return Promise.reject(networkError);
+        }
+    
+        // Pass through server error response
+        const serverError = {
+          success: false,
+          type: "error",
+          message: error.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ"
+        };
+        return Promise.reject(serverError);
       }
     );
   }
@@ -122,11 +74,6 @@ class AuthAPI {
       if (!userData) return null;
 
       const user = JSON.parse(userData);
-      console.log("Current user data:", {
-        id: user.id,
-        hasToken: !!user.token,
-        hasRefreshToken: !!user.refreshToken,
-      });
       return user;
     } catch (error) {
       console.error("Error parsing user data:", error);
@@ -136,12 +83,12 @@ class AuthAPI {
   }
 
   clearAuth() {
-    console.log("Clearing auth data");
     localStorage.removeItem("user");
-    delete this.api.defaults.headers.common.Authorization;
-    window.location.href = "/login";
+    delete this.api.defaults.headers.Authorization;
+    // Note: Removed window.location.href to avoid page refresh
   }
 }
+
 
 const authAPI = new AuthAPI();
 export default authAPI.api;
