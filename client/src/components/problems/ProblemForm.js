@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Upload, X, Search as SearchIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useAlert } from "../../context/AlertContext";
 import api from "../../utils/axios";
 
 function ProblemForm({ onClose }) {
   const { user: currentUser } = useAuth();
+  const { showSuccess, showError, showWarning } = useAlert();
+
   const [formData, setFormData] = useState({
     equipment_id: "",
     description: "",
@@ -13,8 +16,6 @@ function ProblemForm({ onClose }) {
   const [equipment, setEquipment] = useState([]);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredEquipment, setFilteredEquipment] = useState([]);
@@ -86,14 +87,14 @@ function ProblemForm({ onClose }) {
         }
       } catch (error) {
         console.error("Error fetching equipment:", error);
-        setError("ไม่สามารถดึงข้อมูลครุภัณฑ์ได้");
+        showError("ไม่สามารถดึงข้อมูลครุภัณฑ์ได้");
         setEquipment([]);
         setFilteredEquipment([]);
       }
     };
 
     fetchEquipment();
-  }, []);
+  }, [showError]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -107,9 +108,6 @@ function ProblemForm({ onClose }) {
       ...prev,
       [name]: value,
     }));
-
-    // Clear error when user makes changes
-    if (error) setError("");
   };
 
   const validateFile = (file) => {
@@ -133,6 +131,7 @@ function ProblemForm({ onClose }) {
       const error = validateFile(selectedFile);
       if (error) {
         setImageError(error);
+        showWarning(error);
         setFile(null);
         setPreviewUrl(null);
         return;
@@ -170,17 +169,17 @@ function ProblemForm({ onClose }) {
 
   const validateForm = () => {
     if (!formData.equipment_id) {
-      setError("กรุณาเลือกครุภัณฑ์");
+      showError("กรุณาเลือกครุภัณฑ์");
       return false;
     }
 
     if (!formData.description.trim()) {
-      setError("กรุณากรอกรายละเอียดปัญหา");
+      showError("กรุณากรอกรายละเอียดปัญหา");
       return false;
     }
 
     if (formData.description.length < 5) {
-      setError("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
+      showError("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
       return false;
     }
 
@@ -200,7 +199,6 @@ function ProblemForm({ onClose }) {
     if (hasSimilar) return;
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       const formDataToSend = new FormData();
@@ -219,19 +217,25 @@ function ProblemForm({ onClose }) {
       });
 
       if (response.data.success) {
-        onClose();
+        // Show success message
+        showSuccess("แจ้งปัญหาสำเร็จแล้ว");
+
+        // Wait a moment before closing the form
+        setTimeout(() => {
+          onClose();
+        }, 1000);
       } else {
-        setError(response.data.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+        showError(response.data.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
       }
     } catch (error) {
       console.error("Error submitting problem:", error);
       if (error.response?.status === 401) {
-        setError("กรุณาเข้าสู่ระบบใหม่");
+        showError("กรุณาเข้าสู่ระบบใหม่");
         // Handle unauthorized access - redirect to login or refresh token
       } else if (error.response?.status === 413) {
-        setError("ไฟล์มีขนาดใหญ่เกินไป");
+        showError("ไฟล์มีขนาดใหญ่เกินไป");
       } else {
-        setError(
+        showError(
           error.response?.data?.message || "เกิดข้อผิดพลาดในการส่งข้อมูล"
         );
       }
@@ -242,7 +246,7 @@ function ProblemForm({ onClose }) {
 
   const handleRemoveFile = () => {
     setFile(null);
-    setPreview(null);
+    setPreviewUrl(null);
   };
 
   const SimilarProblemsModal = () => (
@@ -303,10 +307,13 @@ function ProblemForm({ onClose }) {
                 });
 
                 if (response.data.success) {
-                  onClose();
+                  showSuccess("แจ้งปัญหาสำเร็จแล้ว");
+                  setTimeout(() => {
+                    onClose();
+                  }, 1000);
                 }
               } catch (error) {
-                setError(
+                showError(
                   error.response?.data?.message ||
                     "เกิดข้อผิดพลาดในการส่งข้อมูล"
                 );
@@ -327,12 +334,6 @@ function ProblemForm({ onClose }) {
     <div className="bg-white rounded-lg shadow-md p-6">
       {showSimilarProblems && <SimilarProblemsModal />}
       <h2 className="text-xl font-bold mb-6">แจ้งปัญหาครุภัณฑ์</h2>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {error}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Problem Type Selection - Primary Focus */}

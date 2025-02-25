@@ -1,8 +1,10 @@
 import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { AlertProvider } from "./context/AlertContext";
+import AlertContainer from "./components/common/AlertContainer";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import axios from "./utils/axios"; // Make sure this path is correct
+import axios from "./utils/axios";
 
 // Import your pages
 import LoginPage from "./pages/LoginPage";
@@ -28,90 +30,93 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/" element={<LoginPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+      <AlertProvider>
+        <AuthProvider>
+          <AlertContainer />
+          <Routes>
+            <Route path="/" element={<LoginPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/problem-analytics"
-            element={
-              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
-                <ProblemAnalyticsPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/problem-analytics"
+              element={
+                <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                  <ProblemAnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/equipment"
-            element={
-              <ProtectedRoute
-                requiredRole={[
-                  "admin",
-                  "equipment_manager",
-                  "equipment_assistant",
-                ]}
-              >
-                <EquipmentPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/equipment"
+              element={
+                <ProtectedRoute
+                  requiredRole={[
+                    "admin",
+                    "equipment_manager",
+                    "equipment_assistant",
+                  ]}
+                >
+                  <EquipmentPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/status"
-            element={
-              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
-                <StatusPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/status"
+              element={
+                <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                  <StatusPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/unfixable"
-            element={
-              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
-                <UnfixablePage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/unfixable"
+              element={
+                <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                  <UnfixablePage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/computer-center"
-            element={
-              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
-                <ComputerCenterPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/computer-center"
+              element={
+                <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                  <ComputerCenterPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
-                <UsersPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute requiredRole={["admin", "equipment_manager"]}>
+                  <UsersPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </AuthProvider>
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </AuthProvider>
+      </AlertProvider>
     </BrowserRouter>
   );
 }

@@ -651,4 +651,131 @@ router.post("/:id/join", auth, async (req, res) => {
   }
 });
 
+// Add this to your server/routes/problem.routes.js
+
+// Get paginated problems
+// Add this to your server/routes/problem.routes.js
+
+// Get paginated problems
+router.get("/paginated", auth, async (req, res) => {
+  try {
+    // Basic pagination parameters
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit) || 10);
+    const offset = (page - 1) * limit;
+
+    // Get search parameters
+    const search = req.query.search || "";
+    const statusFilters = req.query.status
+      ? Array.isArray(req.query.status)
+        ? req.query.status
+        : [req.query.status]
+      : [];
+    const typeFilters = req.query.type
+      ? Array.isArray(req.query.type)
+        ? req.query.type
+        : [req.query.type]
+      : [];
+
+    // Build the conditions
+    let conditions = ["1=1"]; // Always true condition to start the WHERE clause
+    let params = [];
+
+    // Add role-based filtering
+    if (req.user.role === "reporter") {
+      conditions.push("p.reported_by = ?");
+      params.push(req.user.id);
+    } else if (req.user.role === "equipment_assistant") {
+      conditions.push(
+        "(p.status_id = 1 OR (p.status_id = 2 AND p.assigned_to = ?) OR p.reported_by = ?)"
+      );
+      params.push(req.user.id, req.user.id);
+    }
+
+    // Add search filters
+    if (search) {
+      conditions.push(
+        "(e.equipment_id LIKE ? OR e.name LIKE ? OR p.description LIKE ? OR CONCAT(u.firstname, ' ', u.lastname) LIKE ?)"
+      );
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    // Add status filters
+    if (statusFilters.length > 0) {
+      conditions.push(
+        `p.status_id IN (${statusFilters.map(() => "?").join(",")})`
+      );
+      params.push(...statusFilters);
+    }
+
+    // Add type filters
+    if (typeFilters.length > 0) {
+      conditions.push(
+        `p.problem_type IN (${typeFilters.map(() => "?").join(",")})`
+      );
+      params.push(...typeFilters);
+    }
+
+    // Build the WHERE clause
+    const whereClause = conditions.join(" AND ");
+
+    // Build the main query
+    const baseQuery = `
+      SELECT p.*, 
+             e.name as equipment_name,   
+             e.equipment_id,             
+             e.status as equipment_status,
+             e.room as equipment_room, 
+             s.name as status_name,
+             s.color as status_color,
+             CONCAT(u.firstname, ' ', u.lastname) as reporter_name,
+             CONCAT(a.firstname, ' ', a.lastname) as assigned_to_name,
+             p.problem_type
+      FROM problems p
+      LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN users u ON p.reported_by = u.id
+      LEFT JOIN users a ON p.assigned_to = a.id
+      LEFT JOIN status s ON p.status_id = s.id
+      WHERE ${whereClause}
+      ORDER BY p.created_at DESC 
+    `;
+
+    // Execute the count query (without LIMIT and OFFSET)
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM problems p
+      LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN users u ON p.reported_by = u.id
+      WHERE ${whereClause}
+    `;
+
+    // Execute data query with pagination
+    const dataQuery = baseQuery + ` LIMIT ${limit} OFFSET ${offset}`;
+
+    // Execute both queries
+    const [problemsResult] = await db.query(dataQuery, params);
+    const [countResult] = await db.query(countQuery, params);
+
+    // Calculate total pages
+    const totalItems = countResult[0].total;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    res.json({
+      success: true,
+      data: problemsResult,
+      page,
+      limit,
+      totalItems,
+      totalPages,
+    });
+  } catch (error) {
+    console.error("Error fetching paginated problems:", error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงข้อมูล",
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;

@@ -1,91 +1,146 @@
+// src/components/equipment/EquipmentList.js
 import React, { useState, useEffect } from "react";
 import { Edit, Trash2, Search as SearchIcon, Filter } from "lucide-react";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
+import { useAlert } from "../../context/AlertContext";
+import Pagination from "../common/Pagination";
+import ConfirmationDialog from "../common/ConfirmationDialog";
 
 function EquipmentList({ onEdit }) {
-  const { user } = useAuth(); // Changed from user: currentUser to just user
+  const { user } = useAuth();
+  const { showSuccess, showError } = useAlert();
   const isEquipmentManager = user?.role === "equipment_manager";
+
+  // State for equipment data and UI
   const [equipment, setEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filteredEquipment, setFilteredEquipment] = useState([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize] = useState(10);
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filters, setFilters] = useState({
     status: [],
-    type: []
+    type: [],
   });
 
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    itemId: null,
+    itemName: "",
+    isLoading: false,
+    confirmButtonClass: "",
+    confirmText: "",
+  });
+
+  // Handle search input with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1); // Reset to first page on new search
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch equipment data
   const fetchEquipment = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/equipment");
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append("page", currentPage);
+      params.append("limit", pageSize);
+
+      if (debouncedSearch) {
+        params.append("search", debouncedSearch);
+      }
+
+      if (filters.status.length > 0) {
+        filters.status.forEach((status) => params.append("status", status));
+      }
+
+      if (filters.type.length > 0) {
+        filters.type.forEach((type) => params.append("type", type));
+      }
+
+      const response = await api.get(
+        `/equipment/paginated?${params.toString()}`
+      );
+
       if (response.data.success) {
-        setEquipment(response.data.data);
-        setFilteredEquipment(response.data.data);
+        setEquipment(response.data.data || []);
+        setTotalPages(response.data.totalPages || 1);
       }
     } catch (error) {
       console.error("Error fetching equipment:", error);
-      setError("ไม่สามารถดึงข้อมูลครุภัณฑ์ได้");
+      showError("ไม่สามารถดึงข้อมูลครุภัณฑ์ได้");
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch data when page, search, or filters change
   useEffect(() => {
     fetchEquipment();
-  }, []);
+  }, [currentPage, debouncedSearch, filters]);
 
-  useEffect(() => {
-    const filtered = equipment.filter((item) => {
-      // Search filter
-      const searchLower = searchQuery.toLowerCase();
-      const equipmentId = item.equipment_id?.toLowerCase() || "";
-      const name = item.name?.toLowerCase() || "";
-      const type = item.type?.toLowerCase() || "";
-      const room = item.room?.toLowerCase() || "";
-      const status = getStatusText(item.status)?.toLowerCase() || "";
+  // Handle edit click
+  const handleEditClick = (item) => {
+    onEdit(item);
+  };
 
-      const matchesSearch =
-        equipmentId.includes(searchLower) ||
-        name.includes(searchLower) ||
-        type.includes(searchLower) ||
-        room.includes(searchLower) ||
-        status.includes(searchLower);
-
-      // Status and Type filters
-      const matchesStatus =
-        filters.status.length === 0 || filters.status.includes(item.status);
-      const matchesType =
-        filters.type.length === 0 || filters.type.includes(item.type);
-
-      return matchesSearch && matchesStatus && matchesType;
+  // Delete equipment with confirmation
+  const handleDeleteClick = (id, name) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการลบครุภัณฑ์",
+      message: `คุณต้องการลบครุภัณฑ์ "${name}" ใช่หรือไม่?`,
+      itemId: id,
+      itemName: name,
+      isLoading: false,
+      confirmButtonClass: "bg-red-600 hover:bg-red-700",
+      confirmText: "ลบ",
     });
+  };
 
-    setFilteredEquipment(filtered);
-}, [searchQuery, equipment, filters]);
+  const handleConfirmDelete = async () => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
 
-  const STATUS_OPTIONS = [
-    { value: "active", label: "ใช้งานได้" },
-    { value: "maintenance", label: "ซ่อมบำรุง" },
-    { value: "inactive", label: "ไม่พร้อมใช้งาน" },
-  ];
-
-  const handleDelete = async (id) => {
-    if (window.confirm("คุณต้องการลบครุภัณฑ์นี้ใช่หรือไม่?")) {
-      try {
-        const response = await api.delete(`/equipment/${id}`);
-        if (response.data.success) {
-          fetchEquipment(); // Refresh the list
-        }
-      } catch (error) {
-        console.error("Error deleting equipment:", error);
-        setError(error.response?.data?.message || "ไม่สามารถลบครุภัณฑ์ได้");
+    try {
+      const response = await api.delete(`/equipment/${confirmDialog.itemId}`);
+      if (response.data.success) {
+        showSuccess(`ลบครุภัณฑ์ "${confirmDialog.itemName}" สำเร็จ`);
+        fetchEquipment(); // Refresh the list
       }
+    } catch (error) {
+      console.error("Error deleting equipment:", error);
+      showError(error.response?.data?.message || "ไม่สามารถลบครุภัณฑ์ได้");
+    } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
     }
   };
 
+  // Handle page change
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    // The fetchEquipment will be triggered by the useEffect
+  };
+
+  // UI helper functions
   const getStatusBadgeColor = (status) => {
     switch (status) {
       case "active":
@@ -112,7 +167,7 @@ function EquipmentList({ onEdit }) {
     }
   };
 
-  if (loading) {
+  if (loading && equipment.length === 0) {
     return (
       <div className="text-center py-8">
         <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
@@ -148,25 +203,24 @@ function EquipmentList({ onEdit }) {
               />
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              พบ {filteredEquipment.length} รายการ{" "}
-              {searchQuery && `จากการค้นหา "${searchQuery}"`}
+              พบ {equipment.length} รายการจากทั้งหมด
+              {debouncedSearch && ` จากการค้นหา "${debouncedSearch}"`}
             </p>
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
-
+        {/* Filters Section (for equipment managers) */}
         {isEquipmentManager && (
           <div className="bg-white p-4 rounded-lg shadow mb-6">
             <div className="flex flex-wrap gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium mb-1">สถานะ</label>
                 <div className="space-x-2">
-                  {STATUS_OPTIONS.map((status) => (
+                  {[
+                    { value: "active", label: "ใช้งานได้" },
+                    { value: "maintenance", label: "ซ่อมบำรุง" },
+                    { value: "inactive", label: "ไม่พร้อมใช้งาน" },
+                  ].map((status) => (
                     <label
                       key={status.value}
                       className="inline-flex items-center"
@@ -223,6 +277,7 @@ function EquipmentList({ onEdit }) {
           </div>
         )}
 
+        {/* Equipment Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -248,7 +303,7 @@ function EquipmentList({ onEdit }) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredEquipment.map((item) => (
+              {equipment.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {item.equipment_id}
@@ -273,14 +328,16 @@ function EquipmentList({ onEdit }) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
                     <button
-                      onClick={() => onEdit(item)}
+                      onClick={() => handleEditClick(item)}
                       className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                      title="แก้ไข"
                     >
                       <Edit size={18} />
                     </button>
                     <button
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => handleDeleteClick(item.id, item.name)}
                       className="text-red-600 hover:text-red-900 transition-colors"
+                      title="ลบ"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -289,17 +346,41 @@ function EquipmentList({ onEdit }) {
               ))}
             </tbody>
           </table>
-          {filteredEquipment.length === 0 && (
+
+          {equipment.length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500">
-                {searchQuery
-                  ? "ไม่พบรายการที่ตรงกับการค้นหา"
+                {debouncedSearch ||
+                filters.status.length > 0 ||
+                filters.type.length > 0
+                  ? "ไม่พบรายการที่ตรงกับการค้นหาหรือตัวกรอง"
                   : "ไม่พบรายการครุภัณฑ์"}
               </p>
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          className="mt-6"
+        />
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText={confirmDialog.confirmText}
+        cancelText="ยกเลิก"
+        confirmButtonClass={confirmDialog.confirmButtonClass}
+      />
     </div>
   );
 }

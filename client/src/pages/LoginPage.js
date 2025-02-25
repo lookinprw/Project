@@ -1,64 +1,40 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  Eye,
-  EyeOff,
-  AlertCircle,
-  User,
-  Lock,
-  CheckCircle,
-} from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Eye, EyeOff, User, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useAlert } from "../context/AlertContext";
 import Logo from "../assets/logo.png";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+  const { showSuccess, showError } = useAlert();
+
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
-  const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Check for redirect messages
   useEffect(() => {
-    console.log("Error state changed:", error);
-  }, [error]);
+    if (location.state?.message) {
+      if (location.state.type === "success") {
+        showSuccess(location.state.message);
+      } else {
+        showError(location.state.message);
+      }
 
-  // Special accounts configuration
-  const specialAccounts = {
-    admin: {
-      username: "admin",
-      role: "admin",
-      redirectPath: "/users",
-    },
-    support: {
-      username: "support",
-      role: "equipment_manager",
-      redirectPath: "/dashboard",
-    },
-  };
+      // Clear the location state to prevent showing the message again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location, showSuccess, showError]);
 
   const validateForm = () => {
     const newErrors = {};
-
-    if (!formData.username) {
-      newErrors.username = "กรุณากรอกรหัสผู้ใช้";
-    } else {
-      const isSpecialAccount = Object.values(specialAccounts).some(
-        (account) => account.username === formData.username
-      );
-
-      if (!isSpecialAccount) {
-        if (formData.username.includes(" ")) {
-          newErrors.username = "รหัสผู้ใช้ต้องไม่มีช่องว่าง";
-        } else if (formData.username.length < 8) {
-          newErrors.username = "รหัสผู้ใช้ต้องมีความยาวอย่างน้อย 8 ตัวอักษร";
-        }
-      }
-    }
 
     if (!formData.password) {
       newErrors.password = "กรุณากรอกรหัสผ่าน";
@@ -82,9 +58,6 @@ function LoginPage() {
         [name]: "",
       }));
     }
-
-    // Don't clear error state on input change
-    // Remove the error clearing code from here
   };
 
   const handleSubmit = async (e) => {
@@ -95,39 +68,35 @@ function LoginPage() {
     }
 
     setIsLoading(true);
-    setError(null);
 
     try {
       const result = await login(formData);
-      console.log("Login result:", result);
 
       if (result.success) {
-        const specialAccount = Object.values(specialAccounts).find(
-          (account) => account.username === formData.username
-        );
+        const specialAccount = ["admin", "support"].includes(formData.username);
 
         if (specialAccount) {
-          navigate(specialAccount.redirectPath, { replace: true });
+          if (formData.username === "admin") {
+            navigate("/users", { replace: true });
+          } else {
+            navigate("/dashboard", { replace: true });
+          }
         } else {
           navigate("/dashboard", { replace: true });
         }
+
+        showSuccess("เข้าสู่ระบบสำเร็จ");
       } else {
-        // Don't wrap the result in another object
-        console.log("Setting error state:", result);
-        setError(result);
-        setIsLoading(false); // Make sure to set loading to false before setting error
+        // Handle error from login
+        showError(result.message || "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError({
-        type: "error",
-        message: err.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
-      });
+      showError(err.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
+    } finally {
       setIsLoading(false);
     }
   };
-
-  console.log("Current error state:", error);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -143,29 +112,6 @@ function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
         <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-lg sm:px-10 border border-gray-100">
-          {error && (
-            <div
-              className={`mb-6 p-4 rounded-lg ${
-                error.type === "success"
-                  ? "bg-green-50 border-l-4 border-green-400"
-                  : "bg-red-50 border-l-4 border-red-400"
-              } flex items-center`}
-            >
-              <div
-                className={`flex items-center ${
-                  error.type === "success" ? "text-green-800" : "text-red-800"
-                }`}
-              >
-                {error.type === "success" ? (
-                  <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                )}
-                <span>{error.message}</span>
-              </div>
-            </div>
-          )}
-
           <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             <div>
               <label

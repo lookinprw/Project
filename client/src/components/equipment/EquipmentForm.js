@@ -1,5 +1,8 @@
+// src/components/equipment/EquipmentForm.js
 import React, { useState, useEffect } from "react";
 import api from "../../utils/axios";
+import { useAlert } from "../../context/AlertContext";
+import ConfirmationDialog from "../common/ConfirmationDialog";
 
 // Constants for dropdowns
 const TYPE_OPTIONS = {
@@ -70,6 +73,8 @@ const validateEquipment = (values) => {
 };
 
 function EquipmentForm({ equipment = null, onComplete }) {
+  const { showSuccess, showError } = useAlert();
+
   const [formData, setFormData] = useState({
     equipment_id: "",
     name: "",
@@ -79,8 +84,17 @@ function EquipmentForm({ equipment = null, onComplete }) {
   });
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    isLoading: false,
+    confirmText: "",
+    confirmButtonClass: "",
+  });
 
   useEffect(() => {
     if (equipment) {
@@ -110,11 +124,29 @@ function EquipmentForm({ equipment = null, onComplete }) {
       return;
     }
 
-    setLoading(true);
-    setError("");
-    setValidationErrors({});
+    // Show confirmation dialog
+    setConfirmDialog({
+      isOpen: true,
+      title: equipment ? "ยืนยันการแก้ไขครุภัณฑ์" : "ยืนยันการเพิ่มครุภัณฑ์",
+      message: equipment
+        ? `คุณต้องการบันทึกการเปลี่ยนแปลงข้อมูลครุภัณฑ์ "${formData.name}" ใช่หรือไม่?`
+        : `คุณต้องการเพิ่มครุภัณฑ์ "${formData.name}" ใช่หรือไม่?`,
+      isLoading: false,
+      confirmText: equipment ? "บันทึกการแก้ไข" : "เพิ่มครุภัณฑ์",
+      confirmButtonClass: "bg-indigo-600 hover:bg-indigo-700",
+    });
+  };
+
+  const handleConfirmSubmit = async () => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
 
     try {
+      // Prepare submission data with cleaned equipment_id
+      const submissionData = {
+        ...formData,
+        equipment_id: formData.equipment_id.replace(/\s/g, ""), // Remove spaces before submission
+      };
+
       let response;
       if (equipment) {
         response = await api.put(`/equipment/${equipment.id}`, submissionData);
@@ -123,14 +155,20 @@ function EquipmentForm({ equipment = null, onComplete }) {
       }
 
       if (response.data.success) {
+        showSuccess(equipment ? "แก้ไขครุภัณฑ์สำเร็จ" : "เพิ่มครุภัณฑ์สำเร็จ");
         onComplete();
       }
     } catch (error) {
       console.error("Error saving equipment:", error);
-      setError(
+      showError(
         error.response?.data?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล"
       );
     } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
       setLoading(false);
     }
   };
@@ -165,12 +203,6 @@ function EquipmentForm({ equipment = null, onComplete }) {
       <h2 className="text-lg font-semibold mb-6">
         {equipment ? "แก้ไขครุภัณฑ์" : "เพิ่มครุภัณฑ์ใหม่"}
       </h2>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {error}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -317,6 +349,19 @@ function EquipmentForm({ equipment = null, onComplete }) {
           </button>
         </div>
       </form>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmSubmit}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText={confirmDialog.confirmText}
+        cancelText="ยกเลิก"
+        confirmButtonClass={confirmDialog.confirmButtonClass}
+      />
     </div>
   );
 }

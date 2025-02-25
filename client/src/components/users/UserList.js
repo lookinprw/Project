@@ -1,17 +1,49 @@
+// src/components/users/UserList.js
 import React, { useState, useEffect } from "react";
 import { Trash2, Search as SearchIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useAlert } from "../../context/AlertContext";
 import api from "../../utils/axios";
+import Pagination from "../common/Pagination";
+import ConfirmationDialog from "../common/ConfirmationDialog";
 
 function UserList() {
   const { user: currentUser } = useAuth();
+  const { showSuccess, showError } = useAlert();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [updating, setUpdating] = useState(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize] = useState(10);
+
+  // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredUsers, setFilteredUsers] = useState([]);
-  const [updating, setUpdating] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Confirmation dialogs state
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    userId: null,
+    username: "",
+    isLoading: false,
+  });
+
+  const [roleConfirm, setRoleConfirm] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    userId: null,
+    username: "",
+    newRole: "",
+    newRoleText: "",
+    isLoading: false,
+  });
 
   // Updated role options with your desired order
   const ROLE_OPTIONS = {
@@ -20,7 +52,6 @@ function UserList() {
     equipment_manager: "ผู้จัดการครุภัณฑ์",
     admin: "ผู้ดูแลระบบ",
   };
-
   // Role priority for sorting (lower number = higher in list)
   const ROLE_PRIORITY = {
     reporter: 1,
@@ -28,6 +59,35 @@ function UserList() {
     equipment_manager: 3,
     admin: 4,
   };
+
+  // Handle search input with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Filter users based on search query
+  useEffect(() => {
+    const filtered = users.filter((user) => {
+      if (!debouncedSearch) return true;
+
+      const searchLower = debouncedSearch.toLowerCase();
+      return (
+        (user.username || "").toLowerCase().includes(searchLower) ||
+        (user.firstname || "").toLowerCase().includes(searchLower) ||
+        (user.lastname || "").toLowerCase().includes(searchLower) ||
+        (user.branch || "").toLowerCase().includes(searchLower) ||
+        (getRoleText(user.role) || "").toLowerCase().includes(searchLower)
+      );
+    });
+
+    // Calculate pages after filtering
+    setFilteredUsers(filtered);
+    setTotalPages(Math.ceil(filtered.length / pageSize));
+  }, [debouncedSearch, users, pageSize]);
 
   const getAvailableRoles = (currentUserRole) => {
     if (currentUserRole === "admin") {
@@ -78,28 +138,6 @@ function UserList() {
     fetchUsers();
   }, []);
 
-  useEffect(() => {
-    const filtered = users.filter((user) => {
-      if (!searchQuery) return true;
-
-      const searchLower = searchQuery.toLowerCase();
-      return (
-        (user.username || "").toLowerCase().includes(searchLower) ||
-        (user.firstname || "").toLowerCase().includes(searchLower) ||
-        (user.lastname || "").toLowerCase().includes(searchLower) ||
-        (user.branch || "").toLowerCase().includes(searchLower) ||
-        (getRoleText(user.role) || "").toLowerCase().includes(searchLower)
-      );
-    });
-
-    // Sort filtered users by role priority
-    const sortedFiltered = [...filtered].sort((a, b) => {
-      return (ROLE_PRIORITY[a.role] || 99) - (ROLE_PRIORITY[b.role] || 99);
-    });
-
-    setFilteredUsers(sortedFiltered);
-  }, [searchQuery, users]);
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -111,61 +149,115 @@ function UserList() {
         });
         setUsers(sortedUsers);
         setFilteredUsers(sortedUsers);
+        setTotalPages(Math.ceil(sortedUsers.length / pageSize));
       }
     } catch (err) {
       console.error("Error fetching users:", err);
-      setError("ไม่สามารถดึงข้อมูลผู้ใช้งานได้");
+      showError("ไม่สามารถดึงข้อมูลผู้ใช้งานได้");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRoleChange = async (userId, newRole) => {
+  const handleRoleChangeClick = (userId, username, newRole) => {
     const targetUser = users.find((u) => u.id === userId);
     if (!targetUser || !canModifyRole(targetUser) || updating) return;
 
-    try {
-      setUpdating(userId);
-      setError("");
-      const response = await api.patch(`/users/${userId}/role`, {
-        role: newRole,
-      });
-      if (response.data.success) {
-        await fetchUsers();
-      }
-    } catch (err) {
-      console.error("Error updating role:", err);
-      setError(err.response?.data?.message || "ไม่สามารถอัพเดทสิทธิ์การใช้งาน");
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const handleDelete = async (userId, studentId) => {
-    const targetUser = users.find((u) => u.id === userId);
-    if (!targetUser || !canDeleteUser(targetUser)) {
-      setError("ไม่สามารถลบผู้ใช้นี้ได้");
+    if (newRole === "equipment_manager" && currentUser.role !== "admin") {
+      showError(
+        "เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถกำหนดสิทธิ์ผู้จัดการครุภัณฑ์ได้"
+      );
       return;
     }
 
-    if (!window.confirm(`ยืนยันการลบผู้ใช้ ${studentId}?`)) return;
+    setRoleConfirm({
+      isOpen: true,
+      title: "ยืนยันการเปลี่ยนสิทธิ์การใช้งาน",
+      message: `คุณต้องการเปลี่ยนสิทธิ์การใช้งานของ "${username}" เป็น "${getRoleText(
+        newRole
+      )}" ใช่หรือไม่?`,
+      userId,
+      username,
+      newRole,
+      newRoleText: getRoleText(newRole),
+      isLoading: false,
+    });
+  };
+
+  const handleConfirmRoleChange = async () => {
+    setRoleConfirm((prev) => ({ ...prev, isLoading: true }));
 
     try {
-      setDeleteLoading(userId);
-      setError("");
-      const response = await api.delete(`/users/${userId}`);
+      const response = await api.patch(`/users/${roleConfirm.userId}/role`, {
+        role: roleConfirm.newRole,
+      });
       if (response.data.success) {
+        await fetchUsers();
+        showSuccess(
+          `เปลี่ยนสิทธิ์ผู้ใช้เป็น ${roleConfirm.newRoleText} สำเร็จ`
+        );
+      }
+    } catch (err) {
+      console.error("Error updating role:", err);
+      showError(
+        err.response?.data?.message || "ไม่สามารถอัพเดทสิทธิ์การใช้งาน"
+      );
+    } finally {
+      setRoleConfirm((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+    }
+  };
+
+  const handleDeleteClick = (userId, username) => {
+    const targetUser = users.find((u) => u.id === userId);
+    if (!targetUser || !canDeleteUser(targetUser)) {
+      showError("ไม่สามารถลบผู้ใช้นี้ได้");
+      return;
+    }
+
+    setDeleteConfirm({
+      isOpen: true,
+      title: "ยืนยันการลบผู้ใช้",
+      message: `คุณต้องการลบผู้ใช้ "${username}" ใช่หรือไม่?`,
+      userId,
+      username,
+      isLoading: false,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleteConfirm((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      const response = await api.delete(`/users/${deleteConfirm.userId}`);
+      if (response.data.success) {
+        showSuccess(`ลบผู้ใช้ ${deleteConfirm.username} สำเร็จ`);
         await fetchUsers();
       }
     } catch (err) {
       console.error("Delete error:", err);
-      setError(err.response?.data?.message || "เกิดข้อผิดพลาดในการลบผู้ใช้งาน");
+      showError(
+        err.response?.data?.message || "เกิดข้อผิดพลาดในการลบผู้ใช้งาน"
+      );
     } finally {
-      setDeleteLoading(null);
+      setDeleteConfirm((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
     }
   };
 
-  if (loading) {
+  // Get paginated data
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  if (loading && users.length === 0) {
     return (
       <div className="text-center py-8">
         <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
@@ -201,16 +293,10 @@ function UserList() {
             </div>
             <p className="mt-1 text-sm text-gray-500">
               พบ {filteredUsers.length} รายการ{" "}
-              {searchQuery && `จากการค้นหา "${searchQuery}"`}
+              {debouncedSearch && `จากการค้นหา "${debouncedSearch}"`}
             </p>
           </div>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -234,7 +320,7 @@ function UserList() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {user.username}
@@ -248,18 +334,13 @@ function UserList() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
                       value={user.role}
-                      onChange={(e) => {
-                        if (
-                          e.target.value === "equipment_manager" &&
-                          currentUser.role !== "admin"
-                        ) {
-                          setError(
-                            "เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถกำหนดสิทธิ์ผู้จัดการครุภัณฑ์ได้"
-                          );
-                          return;
-                        }
-                        handleRoleChange(user.id, e.target.value);
-                      }}
+                      onChange={(e) =>
+                        handleRoleChangeClick(
+                          user.id,
+                          user.username,
+                          e.target.value
+                        )
+                      }
                       disabled={!canModifyRole(user) || updating === user.id}
                       className={`block w-40 py-1 px-2 border rounded-md text-sm font-medium
                         ${getRoleBadgeColor(
@@ -281,15 +362,11 @@ function UserList() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <button
-                      onClick={() => handleDelete(user.id, user.username)}
-                      disabled={
-                        !canDeleteUser(user) || deleteLoading === user.id
-                      }
+                      onClick={() => handleDeleteClick(user.id, user.username)}
+                      disabled={!canDeleteUser(user)}
                       className={`text-red-600 hover:text-red-900 
                         disabled:opacity-50 disabled:cursor-not-allowed 
-                        transition-colors ${
-                          deleteLoading === user.id ? "opacity-50" : ""
-                        }`}
+                        transition-colors`}
                       title={
                         !canDeleteUser(user)
                           ? "ไม่สามารถลบผู้ใช้นี้ได้"
@@ -303,6 +380,7 @@ function UserList() {
               ))}
             </tbody>
           </table>
+
           {filteredUsers.length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500">
@@ -313,7 +391,41 @@ function UserList() {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          className="mt-6"
+        />
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
+        title={deleteConfirm.title}
+        message={deleteConfirm.message}
+        isLoading={deleteConfirm.isLoading}
+        confirmText="ลบ"
+        cancelText="ยกเลิก"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
+      {/* Role Change Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={roleConfirm.isOpen}
+        onClose={() => setRoleConfirm((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmRoleChange}
+        title={roleConfirm.title}
+        message={roleConfirm.message}
+        isLoading={roleConfirm.isLoading}
+        confirmText="เปลี่ยน"
+        cancelText="ยกเลิก"
+        confirmButtonClass="bg-indigo-600 hover:bg-indigo-700"
+      />
     </div>
   );
 }

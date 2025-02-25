@@ -1,24 +1,56 @@
-import React, { useState } from 'react';
-import api from '../../utils/axios';
+// src/components/users/UserCreateForm.js
+import React, { useState } from "react";
+import api from "../../utils/axios";
+import { useAlert } from "../../context/AlertContext";
+import ConfirmationDialog from "../common/ConfirmationDialog";
 
 function UserCreateForm({ onSuccess }) {
+  const { showSuccess, showError } = useAlert();
+
   const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    firstname: '',
-    lastname: '',
-    branch: 'ITD',
-    role: 'reporter'
+    username: "",
+    password: "",
+    firstname: "",
+    lastname: "",
+    branch: "ITD",
+    role: "reporter",
   });
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(''); // Added missing state
   const [loading, setLoading] = useState(false);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    isLoading: false,
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+
+    // Basic validation
+    if (
+      !formData.username?.trim() ||
+      !formData.password?.trim() ||
+      !formData.firstname?.trim() ||
+      !formData.lastname?.trim()
+    ) {
+      showError("กรุณากรอกข้อมูลให้ครบถ้วน");
+      return;
+    }
+
+    // Show confirmation dialog
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการเพิ่มผู้ใช้",
+      message: `คุณต้องการเพิ่มผู้ใช้ ${formData.firstname} ${formData.lastname} (${formData.username}) ใช่หรือไม่?`,
+      isLoading: false,
+    });
+  };
+
+  const handleConfirmSubmit = async () => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
 
     try {
       console.log("Submitting user data:", formData);
@@ -29,34 +61,41 @@ function UserCreateForm({ onSuccess }) {
         firstname: formData.firstname.trim(),
         lastname: formData.lastname.trim(),
         branch: formData.branch.trim(),
-        role: formData.role.trim()
+        role: formData.role.trim(),
       });
 
       if (response.data.success) {
-        setSuccess("เพิ่มผู้ใช้สำเร็จ");
+        showSuccess("เพิ่มผู้ใช้สำเร็จ");
         onSuccess?.();
         setFormData({
-          username: '',
-          password: '',
-          firstname: '',
-          lastname: '',
-          branch: 'ITD',
-          role: 'reporter'
+          username: "",
+          password: "",
+          firstname: "",
+          lastname: "",
+          branch: "ITD",
+          role: "reporter",
         });
       }
     } catch (err) {
       console.error("Error creating user:", err);
-      setError(err.response?.data?.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้");
+      showError(
+        err.response?.data?.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้"
+      );
     } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
       setLoading(false);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -64,22 +103,13 @@ function UserCreateForm({ onSuccess }) {
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-lg font-semibold mb-6">เพิ่มผู้ใช้ใหม่</h2>
 
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-700">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 text-green-700">
-          {success}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="username"
+              className="block text-sm font-medium text-gray-700"
+            >
               รหัสผู้ใช้
             </label>
             <input
@@ -94,7 +124,10 @@ function UserCreateForm({ onSuccess }) {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700"
+            >
               รหัสผ่าน
             </label>
             <input
@@ -109,7 +142,10 @@ function UserCreateForm({ onSuccess }) {
           </div>
 
           <div>
-            <label htmlFor="firstname" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="firstname"
+              className="block text-sm font-medium text-gray-700"
+            >
               ชื่อ
             </label>
             <input
@@ -124,7 +160,10 @@ function UserCreateForm({ onSuccess }) {
           </div>
 
           <div>
-            <label htmlFor="lastname" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="lastname"
+              className="block text-sm font-medium text-gray-700"
+            >
               นามสกุล
             </label>
             <input
@@ -139,7 +178,10 @@ function UserCreateForm({ onSuccess }) {
           </div>
 
           <div>
-            <label htmlFor="branch" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="branch"
+              className="block text-sm font-medium text-gray-700"
+            >
               สาขา
             </label>
             <select
@@ -155,7 +197,10 @@ function UserCreateForm({ onSuccess }) {
           </div>
 
           <div>
-            <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="role"
+              className="block text-sm font-medium text-gray-700"
+            >
               บทบาท
             </label>
             <select
@@ -179,10 +224,23 @@ function UserCreateForm({ onSuccess }) {
             disabled={loading}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            {loading ? 'กำลังบันทึก...' : 'เพิ่มผู้ใช้'}
+            {loading ? "กำลังบันทึก..." : "เพิ่มผู้ใช้"}
           </button>
         </div>
       </form>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmSubmit}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText="เพิ่มผู้ใช้"
+        cancelText="ยกเลิก"
+        confirmButtonClass="bg-indigo-600 hover:bg-indigo-700"
+      />
     </div>
   );
 }

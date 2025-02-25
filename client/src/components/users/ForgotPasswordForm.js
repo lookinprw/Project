@@ -1,19 +1,43 @@
+// src/components/users/ForgotPasswordForm.js
 import React, { useState } from "react";
 import { AlertCircle } from "lucide-react";
 import api from "../../utils/axios";
+import { useAlert } from "../../context/AlertContext";
+import ConfirmationDialog from "../common/ConfirmationDialog";
 
 function ForgotPasswordForm() {
+  const { showSuccess, showError } = useAlert();
+
   const [username, setUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    isLoading: false,
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-    setSuccess("");
+
+    if (!username || !newPassword) {
+      showError("กรุณากรอกรหัสผู้ใช้และรหัสผ่านใหม่");
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการรีเซ็ตรหัสผ่าน",
+      message: `คุณต้องการรีเซ็ตรหัสผ่านของผู้ใช้ "${username}" ใช่หรือไม่?`,
+      isLoading: false,
+    });
+  };
+
+  const handleConfirmReset = async () => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
 
     try {
       const response = await api.post("/users/admin-reset-password", {
@@ -22,15 +46,20 @@ function ForgotPasswordForm() {
       });
 
       if (response.data.success) {
-        setSuccess("รีเซ็ตรหัสผ่านสำเร็จ");
+        showSuccess("รีเซ็ตรหัสผ่านสำเร็จ");
         setUsername("");
         setNewPassword("");
       }
     } catch (err) {
-      setError(
+      showError(
         err.response?.data?.message || "เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน"
       );
     } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
       setLoading(false);
     }
   };
@@ -38,19 +67,6 @@ function ForgotPasswordForm() {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-6">รีเซ็ตรหัสผ่านผู้ใช้</h2>
-
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded-md flex items-center">
-          <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-          <p className="text-sm text-red-800">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 rounded-md">
-          <p className="text-sm text-green-800">{success}</p>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -94,6 +110,19 @@ function ForgotPasswordForm() {
           </button>
         </div>
       </form>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmReset}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText="รีเซ็ตรหัสผ่าน"
+        cancelText="ยกเลิก"
+        confirmButtonClass="bg-yellow-600 hover:bg-yellow-700"
+      />
     </div>
   );
 }

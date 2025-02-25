@@ -43,8 +43,6 @@ function RegisterPage() {
       newErrors.username = "ไม่สามารถใช้ชื่อผู้ใช้นี้ได้";
     } else if (formData.username.includes(" ")) {
       newErrors.username = "รหัสผู้ใช้ต้องไม่มีช่องว่าง";
-    } else if (formData.username.length < 8) {
-      newErrors.username = "รหัสผู้ใช้ต้องมีความยาวอย่างน้อย 8 ตัวอักษร";
     }
 
     // Validate firstname

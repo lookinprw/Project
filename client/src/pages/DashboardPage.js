@@ -1,20 +1,41 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useAlert } from "../context/AlertContext";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import ProblemForm from "../components/problems/ProblemForm";
-import { User, Monitor, HardDrive, HelpCircle, Filter } from "lucide-react";
+import Pagination from "../components/common/Pagination";
+import {
+  User,
+  Monitor,
+  HardDrive,
+  HelpCircle,
+  Filter,
+  Plus,
+} from "lucide-react";
 import api from "../utils/axios";
-import { StatusSelect } from "../components/problems/StatusSelect";
 
 function DashboardPage() {
   const { user: currentUser } = useAuth();
+  const { showSuccess, showError } = useAlert();
   const navigate = useNavigate();
-  const [problems, setProblems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  // UI state
   const [showProblemForm, setShowProblemForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Data state
+  const [problems, setProblems] = useState([]);
   const [statuses, setStatuses] = useState([]);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize] = useState(10);
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filters, setFilters] = useState({
     status: [],
     type: [],
@@ -26,20 +47,116 @@ function DashboardPage() {
       currentUser.role
     );
 
-  const tableHeaders = [
-    "ลำดับ",
-    "วันที่",
-    "รหัสครุภัณฑ์",
-    "อุปกรณ์",
-    "ห้อง",
-    "ปัญหา",
-    "ประเภทปัญหา",
-    "ผู้แจ้ง",
-    "รับงาน",
-    "ผู้รับผิดชอบ",
-    !isStaff ? "สถานะ" : "จัดการ",
-  ].filter(Boolean);
+  // Handle search input with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1); // Reset to first page on new search
+    }, 500);
 
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchProblems = async () => {
+    try {
+      setLoading(true);
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append("page", currentPage);
+      params.append("limit", pageSize);
+
+      if (debouncedSearch) {
+        params.append("search", debouncedSearch);
+      }
+
+      if (filters.status.length > 0) {
+        filters.status.forEach((status) => params.append("status", status));
+      }
+
+      if (filters.type.length > 0) {
+        filters.type.forEach((type) => params.append("type", type));
+      }
+
+      // Parallel API calls with Promise.all
+      const [statusesRes, problemsRes] = await Promise.all([
+        api.get("/status"),
+        api.get(`/problems/paginated?${params.toString()}`),
+      ]);
+
+      if (statusesRes.data.success) {
+        setStatuses(statusesRes.data.data);
+      }
+
+      if (problemsRes.data.success) {
+        setProblems(problemsRes.data.data || []);
+        setTotalPages(problemsRes.data.totalPages || 1);
+      }
+    } catch (error) {
+      console.error("Error fetching problems:", error);
+      showError("ไม่สามารถดึงข้อมูลได้");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch data when pagination, search or filters change
+  useEffect(() => {
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+    fetchProblems();
+  }, [currentUser, navigate, currentPage, debouncedSearch, filters]);
+
+  const handleStatusChange = async (problemId, newStatusId) => {
+    try {
+      await api.patch(`/problems/${problemId}/status`, {
+        status_id: newStatusId,
+      });
+      showSuccess("อัพเดทสถานะสำเร็จ");
+      fetchProblems(); // Refresh the list
+    } catch (error) {
+      console.error("Error updating status:", error);
+      showError("ไม่สามารถอัพเดทสถานะได้");
+    }
+  };
+
+  const handleAssign = async (problemId) => {
+    try {
+      const response = await api.patch(`/problems/${problemId}/assign`);
+      if (response.data.success) {
+        showSuccess("รับงานสำเร็จ");
+        await fetchProblems();
+      }
+    } catch (err) {
+      showError("ไม่สามารถรับมอบหมายงานได้");
+    }
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    // The fetchProblems will be triggered by the useEffect
+  };
+
+  const handleFilterChange = (type, value) => {
+    if (type === "status") {
+      setFilters((prev) =>
+        prev.status.includes(value)
+          ? { ...prev, status: prev.status.filter((item) => item !== value) }
+          : { ...prev, status: [...prev.status, value] }
+      );
+    } else if (type === "type") {
+      setFilters((prev) =>
+        prev.type.includes(value)
+          ? { ...prev, type: prev.type.filter((item) => item !== value) }
+          : { ...prev, type: [...prev.type, value] }
+      );
+    }
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  // UI helper functions
   const getProblemTypeDetails = (type) => {
     switch (type) {
       case "hardware":
@@ -69,95 +186,32 @@ function DashboardPage() {
     }
   };
 
-  // In DashboardPage.js, modify the fetchProblems function
-  // In DashboardPage.js, modify the fetchProblems function
-  const fetchProblems = async () => {
-    try {
-      setLoading(true);
-      const [statusesRes, problemsRes] = await Promise.all([
-        api.get("/status"),
-        api.get("/problems"),
-      ]);
-
-      if (statusesRes.data.success && problemsRes.data.success) {
-        // Filter statuses for the dropdown/filter options only
-        let filteredStatuses = statusesRes.data.data;
-        if (currentUser?.role === "equipment_assistant") {
-          filteredStatuses = filteredStatuses.filter(
-            (status) => ![1, 7, 8].includes(status.id)
-          );
-        }
-        setStatuses(filteredStatuses);
-
-        let filteredProblems = problemsRes.data.data;
-
-        // Original equipment assistant filtering logic
-        if (currentUser?.role === "equipment_assistant") {
-          filteredProblems = filteredProblems.filter(
-            (problem) =>
-              problem.status_id === 1 || // Keep this to show pending problems
-              (problem.status_id === 2 &&
-                problem.assigned_to === currentUser.id) ||
-              problem.reported_by === currentUser.id
-          );
-        }
-
-        if (filters.status.length > 0) {
-          filteredProblems = filteredProblems.filter((problem) =>
-            filters.status.includes(problem.status_id)
-          );
-        }
-
-        if (filters.type.length > 0) {
-          filteredProblems = filteredProblems.filter((problem) =>
-            filters.type.includes(problem.problem_type)
-          );
-        }
-
-        setProblems(filteredProblems);
-      }
-    } catch (err) {
-      setError(err.message || "ไม่สามารถดึงข้อมูลได้");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!currentUser) {
-      navigate("/login");
-      return;
-    }
-    fetchProblems();
-  }, [currentUser, navigate, filters]);
-
-  const handleAssign = async (problemId) => {
-    try {
-      const response = await api.patch(`/problems/${problemId}/assign`);
-      if (response.data.success) {
-        await fetchProblems();
-      }
-    } catch (err) {
-      setError("ไม่สามารถรับมอบหมายงานได้");
-    }
-  };
-
   const renderStatusColumn = (problem) => {
     if (isStaff) {
+      // For staff, show status dropdown
       return (
-        <StatusSelect
-          problem={{
-            id: problem.id,
-            status_id: problem.status_id,
-            status_color: problem.status_color,
-            status_name: problem.status_name,
-            equipment_id: problem.equipment_id,
-          }}
-          statuses={statuses}
-          onStatusChange={fetchProblems}
-        />
+        <select
+          value={problem.status_id}
+          onChange={(e) =>
+            handleStatusChange(problem.id, parseInt(e.target.value))
+          }
+          className="block w-40 py-1 px-2 border rounded-md text-sm font-medium"
+          style={{ backgroundColor: problem.status_color }}
+        >
+          {statuses.map((status) => (
+            <option
+              key={status.id}
+              value={status.id}
+              style={{ backgroundColor: "white" }}
+            >
+              {status.name}
+            </option>
+          ))}
+        </select>
       );
     }
+
+    // For normal users, show status badge
     return (
       <span
         className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
@@ -171,7 +225,7 @@ function DashboardPage() {
     );
   };
 
-  if (loading) {
+  if (loading && problems.length === 0) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -221,46 +275,12 @@ function DashboardPage() {
                 </span>
               ) : (
                 <span className="flex items-center">
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M12 4v16m8-8H4"
-                    />
-                  </svg>
+                  <Plus className="w-5 h-5 mr-2" />
                   แจ้งปัญหาใหม่
                 </span>
               )}
             </button>
           </div>
-
-          {error && (
-            <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-red-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Main Content */}
@@ -275,9 +295,9 @@ function DashboardPage() {
           </div>
         ) : (
           <>
-            {/* Filter Section */}
+            {/* Filters */}
             {isStaff && (
-              <div className="bg-white p-4 rounded-lg shadow mb-6">
+              <div className="mb-6 bg-white p-4 rounded-lg shadow">
                 <div className="flex items-center gap-2 mb-2">
                   <Filter className="w-5 h-5 text-gray-500" />
                   <h3 className="text-lg font-medium">ตัวกรอง</h3>
@@ -297,14 +317,9 @@ function DashboardPage() {
                           <input
                             type="checkbox"
                             checked={filters.status.includes(status.id)}
-                            onChange={() => {
-                              setFilters((prev) => ({
-                                ...prev,
-                                status: prev.status.includes(status.id)
-                                  ? prev.status.filter((s) => s !== status.id)
-                                  : [...prev.status, status.id],
-                              }));
-                            }}
+                            onChange={() =>
+                              handleFilterChange("status", status.id)
+                            }
                             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="ml-2 text-sm text-gray-600">
@@ -323,6 +338,7 @@ function DashboardPage() {
                       {[
                         { value: "hardware", label: "ฮาร์ดแวร์" },
                         { value: "software", label: "ซอฟต์แวร์" },
+                        { value: "other", label: "อื่นๆ" },
                       ].map((type) => (
                         <label
                           key={type.value}
@@ -331,14 +347,9 @@ function DashboardPage() {
                           <input
                             type="checkbox"
                             checked={filters.type.includes(type.value)}
-                            onChange={() => {
-                              setFilters((prev) => ({
-                                ...prev,
-                                type: prev.type.includes(type.value)
-                                  ? prev.type.filter((t) => t !== type.value)
-                                  : [...prev.type, type.value],
-                              }));
-                            }}
+                            onChange={() =>
+                              handleFilterChange("type", type.value)
+                            }
                             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="ml-2 text-sm text-gray-600">
@@ -346,6 +357,25 @@ function DashboardPage() {
                           </span>
                         </label>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Search Box */}
+                <div className="mt-4 max-w-md">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ค้นหา
+                  </label>
+                  <div className="relative rounded-md shadow-sm">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="ค้นหาด้วยรหัสครุภัณฑ์, ปัญหา, หรือชื่อผู้แจ้ง..."
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Filter className="h-5 w-5 text-gray-400" />
                     </div>
                   </div>
                 </div>
@@ -358,14 +388,39 @@ function DashboardPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr className="bg-gray-50">
-                      {tableHeaders.map((header, index) => (
-                        <th
-                          key={index}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          {header}
-                        </th>
-                      ))}
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ลำดับ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        วันที่
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        อุปกรณ์
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        รหัสครุภัณฑ์
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ห้อง
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ปัญหา
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ประเภทปัญหา
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ผู้แจ้ง
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        รับงาน
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ผู้รับผิดชอบ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        สถานะ
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -380,7 +435,7 @@ function DashboardPage() {
                           className="hover:bg-gray-50/50 transition-colors duration-150"
                         >
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {index + 1}
+                            {(currentPage - 1) * pageSize + index + 1}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {new Date(problem.created_at).toLocaleDateString(
@@ -388,10 +443,10 @@ function DashboardPage() {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {problem.equipment_id || "N/A"}
+                            {problem.equipment_name || "N/A"}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {problem.equipment_name || "N/A"}
+                            {problem.equipment_id || "N/A"}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {problem.equipment_room || "N/A"}
@@ -472,6 +527,16 @@ function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* Pagination */}
+              {problems.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  className="mt-4"
+                />
+              )}
             </div>
           </>
         )}

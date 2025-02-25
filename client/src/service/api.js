@@ -1,7 +1,6 @@
-import api from "../utils/axios"; // Make sure this path matches your axios.js location
+import api from "../utils/axios";
 
 export const problemService = {
-  // Keep your existing problem service methods
   getProblems: async () => {
     const response = await api.get("/problems");
     return response.data;
@@ -78,7 +77,6 @@ export const authService = {
   },
 
   logout: () => {
-    // Use the clearAuth method from your axios instance
     api.clearAuth();
     window.location.href = "/login";
   },
@@ -93,7 +91,6 @@ export const authService = {
     }
   },
 
-  // Add helper methods
   isAuthenticated: () => {
     return api.isAuthenticated();
   },
