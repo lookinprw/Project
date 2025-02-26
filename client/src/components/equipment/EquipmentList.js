@@ -73,6 +73,10 @@ function EquipmentList({ onEdit }) {
         filters.type.forEach((type) => params.append("type", type));
       }
 
+      // Log the request details for debugging
+      console.log("Fetching equipment with params:", params.toString());
+      console.log("API base URL:", api.defaults.baseURL);
+
       const response = await api.get(
         `/equipment/paginated?${params.toString()}`
       );
@@ -83,12 +87,21 @@ function EquipmentList({ onEdit }) {
       }
     } catch (error) {
       console.error("Error fetching equipment:", error);
+      // More detailed error logging
+      if (error.response) {
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+        console.error("Response headers:", error.response.headers);
+      } else if (error.request) {
+        console.error("No response received:", error.request);
+      } else {
+        console.error("Error message:", error.message);
+      }
       showError("ไม่สามารถดึงข้อมูลครุภัณฑ์ได้");
     } finally {
       setLoading(false);
     }
   };
-
   // Fetch data when page, search, or filters change
   useEffect(() => {
     fetchEquipment();

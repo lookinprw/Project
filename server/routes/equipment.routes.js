@@ -213,41 +213,6 @@ router.delete(
   }
 );
 
-// Get single equipment
-router.get("/:id", auth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [equipment] = await db.execute(
-      "SELECT * FROM equipment WHERE id = ?",
-      [id]
-    );
-
-    if (equipment.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "ไม่พบครุภัณฑ์",
-      });
-    }
-
-    res.json({
-      success: true,
-      data: equipment[0],
-    });
-  } catch (error) {
-    console.error("Error fetching equipment:", error);
-    res.status(500).json({
-      success: false,
-      message: "เกิดข้อผิดพลาดในการดึงข้อมูลครุภัณฑ์",
-    });
-  }
-});
-
-// Add this to your server/routes/equipment.routes.js
-
-// Get paginated equipment
-// server/routes/equipment.routes.js - Add this to your existing file
-
-// Get paginated equipment
 router.get("/paginated", auth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -323,28 +288,21 @@ router.get("/paginated", auth, async (req, res) => {
       queryParams.push(...typeFilters);
     }
 
-    // Complete the query with ordering and pagination
-    baseQuery += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    // Important change: Add pagination directly to the SQL string
+    const dataQuery =
+      baseQuery + ` ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
-    // Make a copy of params for the count query (which doesn't need limit and offset)
-    const countParams = [...queryParams];
-
-    // Add limit and offset to the base query params
-    queryParams.push(limit, offset);
-
-    // Execute both queries in parallel
-    const [equipmentResult, countResult] = await Promise.all([
-      db.execute(baseQuery, queryParams),
-      db.execute(countQuery, countParams),
-    ]);
+    // Execute queries using query() instead of execute()
+    const [equipmentResult] = await db.query(dataQuery, queryParams);
+    const [countResult] = await db.query(countQuery, queryParams);
 
     // Calculate total pages
-    const totalItems = countResult[0][0].total;
+    const totalItems = countResult[0].total;
     const totalPages = Math.ceil(totalItems / limit);
 
     res.json({
       success: true,
-      data: equipmentResult[0],
+      data: equipmentResult,
       page,
       limit,
       totalItems,
@@ -359,6 +317,35 @@ router.get("/paginated", auth, async (req, res) => {
     });
   }
 });
+// Get single equipment
+router.get("/:id", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [equipment] = await db.execute(
+      "SELECT * FROM equipment WHERE id = ?",
+      [id]
+    );
+
+    if (equipment.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบครุภัณฑ์",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: equipment[0],
+    });
+  } catch (error) {
+    console.error("Error fetching equipment:", error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงข้อมูลครุภัณฑ์",
+    });
+  }
+});
+
 // Bulk import route
 router.post(
   "/bulk-import",

@@ -34,34 +34,37 @@ class AuthAPI {
     this.api.interceptors.response.use(
       (response) => response,
       async (error) => {
-        console.log('API Error:', error.response?.data); // Add debug log
-    
+        console.log("API Error:", error.response?.data); // Add debug log
+
         // For login endpoint errors
-        if (error.config.url.includes('/login')) {
+        if (error.config.url.includes("/login")) {
           const errorData = {
             success: false,
             type: "error",
-            message: error.response?.data?.message || "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
+            message:
+              error.response?.data?.message ||
+              "รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
           };
-          console.log('Login error formatted:', errorData); // Add debug log
+          console.log("Login error formatted:", errorData); // Add debug log
           return Promise.reject(errorData);
         }
-    
+
         // Network errors (no response)
         if (!error.response) {
           const networkError = {
             success: false,
             type: "error",
-            message: "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง"
+            message: "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง",
           };
           return Promise.reject(networkError);
         }
-    
+
         // Pass through server error response
         const serverError = {
           success: false,
           type: "error",
-          message: error.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ"
+          message:
+            error.response?.data?.message || "เกิดข้อผิดพลาดในการดำเนินการ",
         };
         return Promise.reject(serverError);
       }
@@ -88,7 +91,6 @@ class AuthAPI {
     // Note: Removed window.location.href to avoid page refresh
   }
 }
-
 
 const authAPI = new AuthAPI();
 export default authAPI.api;
