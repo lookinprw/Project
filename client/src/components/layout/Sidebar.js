@@ -1,8 +1,19 @@
 import React from "react";
-import { MessageCircle, Wrench, Settings, Monitor, AlertCircle, Users, LogOut, User, ChevronRight, Menu, BarChart2 } from "lucide-react";
+import {
+  MessageCircle,
+  Wrench,
+  Settings,
+  Monitor,
+  AlertCircle,
+  Users,
+  LogOut,
+  User,
+  ChevronRight,
+  Menu,
+  BarChart2,
+} from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
@@ -30,51 +41,51 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       path: "/users",
       icon: <Users size={20} />,
       text: "จัดการผู้ใช้",
-      show: isAdmin
+      show: isAdmin,
     },
-    
+
     // Equipment Manager Menu Items
     {
       path: "/dashboard",
       icon: <MessageCircle size={20} />,
       text: "แจ้งปัญหา",
-      show: !isAdmin
+      show: !isAdmin,
     },
-  
+
     {
       path: "/equipment",
       icon: <Wrench size={20} />,
       text: "จัดการครุภัณฑ์",
-      show: isEquipManager
+      show: isEquipManager,
     },
-  
+
     {
       path: "/status",
       icon: <Settings size={20} />,
       text: "จัดการสถานะ",
-      show: isEquipManager
+      show: isEquipManager,
     },
-  
-    {
-      path: "/computer-center",
-      icon: <Monitor size={20} />,
-      text: "รายการส่งซ่อมศูนย์คอมพิวเตอร์",
-      show: isEquipManager
-    },
-  
-    {
-      path: "/problem-analytics",
-      icon: <BarChart2 size={20} />,
-      text: "รายงานการวิเคราะห์ปัญหา",
-      show: isEquipManager
-    },
-  
+
     {
       path: "/unfixable",
       icon: <AlertCircle size={20} />,
       text: "รายงานที่ไม่สามารถแก้ไขได้",
-      show: isEquipManager
-    }
+      show: isEquipManager,
+    },
+
+    {
+      path: "/computer-center",
+      icon: <Monitor size={20} />,
+      text: "รายการส่งซ่อมศูนย์คอมพิวเตอร์",
+      show: isEquipManager,
+    },
+
+    {
+      path: "/problem-analytics",
+      icon: <BarChart2 size={20} />,
+      text: "รายงานการวิเคราะห์ปัญหา",
+      show: isEquipManager,
+    },
   ];
 
   return (

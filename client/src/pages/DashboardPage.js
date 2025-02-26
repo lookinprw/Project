@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import ProblemForm from "../components/problems/ProblemForm";
 import Pagination from "../components/common/Pagination";
+import ConfirmationDialog from "../components/common/ConfirmationDialog";
 import {
   User,
   Monitor,
@@ -12,6 +13,8 @@ import {
   HelpCircle,
   Filter,
   Plus,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import api from "../utils/axios";
 
@@ -23,10 +26,15 @@ function DashboardPage() {
   // UI state
   const [showProblemForm, setShowProblemForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingProblem, setEditingProblem] = useState(null);
 
   // Data state
   const [problems, setProblems] = useState([]);
   const [statuses, setStatuses] = useState([]);
+
+  // Selection state - for bulk operations
+  const [selectedProblems, setSelectedProblems] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,6 +47,18 @@ function DashboardPage() {
   const [filters, setFilters] = useState({
     status: [],
     type: [],
+  });
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    itemId: null,
+    isLoading: false,
+    confirmButtonClass: "",
+    confirmText: "",
+    confirmAction: null,
   });
 
   const isStaff =
@@ -91,6 +111,10 @@ function DashboardPage() {
       if (problemsRes.data.success) {
         setProblems(problemsRes.data.data || []);
         setTotalPages(problemsRes.data.totalPages || 1);
+
+        // Reset selections when problems change
+        setSelectedProblems([]);
+        setSelectAll(false);
       }
     } catch (error) {
       console.error("Error fetching problems:", error);
@@ -149,11 +173,152 @@ function DashboardPage() {
     } else if (type === "type") {
       setFilters((prev) =>
         prev.type.includes(value)
-          ? { ...prev, type: prev.type.filter((item) => item !== value) }
+          ? { ...prev, type: prev.type.filter((item) => item !== type) }
           : { ...prev, type: [...prev.type, value] }
       );
     }
     setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  // Function to check if user can modify a problem
+  const canModifyProblem = (problem) => {
+    if (!problem || !currentUser) return false;
+
+    // Admin and equipment_manager can modify any problem
+    if (
+      currentUser.role === "admin" ||
+      currentUser.role === "equipment_manager"
+    ) {
+      return true;
+    }
+
+    // Users can only modify their own problems
+    return String(problem.reported_by) === String(currentUser.id);
+  };
+
+  // Handle selecting/deselecting individual problem
+  const handleSelectProblem = (problemId) => {
+    setSelectedProblems((prev) => {
+      if (prev.includes(problemId)) {
+        return prev.filter((id) => id !== problemId);
+      } else {
+        return [...prev, problemId];
+      }
+    });
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = () => {
+    if (selectAll) {
+      // Deselect all
+      setSelectedProblems([]);
+    } else {
+      // Select all problems that the user can modify
+      const selectableProblems = problems
+        .filter((problem) => canModifyProblem(problem))
+        .map((problem) => problem.id);
+      setSelectedProblems(selectableProblems);
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // Handle editing a problem
+  const handleEditProblem = (problem) => {
+    setEditingProblem(problem);
+    setShowProblemForm(true);
+  };
+
+  // Handle deleting a problem
+  const handleDeleteProblem = (problemId) => {
+    // Check if user can delete this problem
+    const problem = problems.find((p) => p.id === problemId);
+
+    // Only allow delete if user is equipment_manager or is the reporter
+    const canDelete =
+      currentUser.role === "admin" ||
+      currentUser.role === "equipment_manager" ||
+      (problem && String(problem.reported_by) === String(currentUser.id));
+
+    if (!canDelete) {
+      showError("คุณไม่มีสิทธิ์ลบรายการนี้");
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการลบรายการ",
+      message: "คุณต้องการลบรายการแจ้งปัญหานี้ใช่หรือไม่?",
+      itemId: problemId,
+      isLoading: false,
+      confirmButtonClass: "bg-red-600 hover:bg-red-700",
+      confirmText: "ลบ",
+      confirmAction: () => confirmDeleteProblem(problemId),
+    });
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = () => {
+    if (selectedProblems.length === 0) {
+      showError("กรุณาเลือกรายการที่ต้องการลบ");
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการลบรายการที่เลือก",
+      message: `คุณต้องการลบรายการแจ้งปัญหาที่เลือกจำนวน ${selectedProblems.length} รายการใช่หรือไม่?`,
+      isLoading: false,
+      confirmButtonClass: "bg-red-600 hover:bg-red-700",
+      confirmText: "ลบทั้งหมด",
+      confirmAction: confirmBulkDelete,
+    });
+  };
+
+  // Confirm and execute deletion
+  const confirmDeleteProblem = async (problemId) => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      await api.delete(`/problems/${problemId}`);
+      showSuccess("ลบรายการสำเร็จ");
+      fetchProblems();
+    } catch (error) {
+      console.error("Error deleting problem:", error);
+      showError(error.response?.data?.message || "ไม่สามารถลบรายการได้");
+    } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
+    }
+  };
+
+  // Confirm and execute bulk deletion
+  const confirmBulkDelete = async () => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      // Delete problems one by one
+      const deletePromises = selectedProblems.map((id) =>
+        api.delete(`/problems/${id}`)
+      );
+
+      await Promise.all(deletePromises);
+
+      showSuccess(`ลบรายการทั้งหมด ${selectedProblems.length} รายการสำเร็จ`);
+      setSelectedProblems([]);
+      fetchProblems();
+    } catch (error) {
+      console.error("Error deleting problems:", error);
+      showError(error.response?.data?.message || "ไม่สามารถลบรายการได้");
+    } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
+    }
   };
 
   // UI helper functions
@@ -186,23 +351,28 @@ function DashboardPage() {
     }
   };
 
+  // Improved status badge rendering function
   const renderStatusColumn = (problem) => {
     if (isStaff) {
-      // For staff, show status dropdown
+      // For staff, show status dropdown with improved styling
       return (
         <select
           value={problem.status_id}
           onChange={(e) =>
             handleStatusChange(problem.id, parseInt(e.target.value))
           }
-          className="block w-40 py-1 px-2 border rounded-md text-sm font-medium"
-          style={{ backgroundColor: problem.status_color }}
+          className="block w-40 py-1 px-2 border rounded-md text-sm font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          style={{
+            backgroundColor: "white", // Always white background
+            color: "#1F2937", // Dark gray text for readability
+            borderColor: problem.status_color, // Use status color only for border
+          }}
         >
           {statuses.map((status) => (
             <option
               key={status.id}
               value={status.id}
-              style={{ backgroundColor: "white" }}
+              style={{ backgroundColor: "white", color: "#1F2937" }}
             >
               {status.name}
             </option>
@@ -211,15 +381,21 @@ function DashboardPage() {
       );
     }
 
-    // For normal users, show status badge
+    // For normal users, show status badge with improved styling
     return (
       <span
-        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
+        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"
         style={{
-          backgroundColor: problem.status_color,
-          color: "#000000",
+          backgroundColor: "white", // White background for all badges
+          color: "#1F2937", // Dark text for readability
+          borderColor: problem.status_color, // Use status color for border
         }}
       >
+        {/* Add a colored dot to represent status */}
+        <span
+          className="w-2 h-2 rounded-full mr-1.5"
+          style={{ backgroundColor: problem.status_color }}
+        ></span>
         {problem.status_name}
       </span>
     );
@@ -238,6 +414,15 @@ function DashboardPage() {
     );
   }
 
+  // Count how many problems are selectable (can be modified by current user)
+  const selectableProblemCount = problems.filter((p) =>
+    canModifyProblem(p)
+  ).length;
+  // Check if all selectable problems are selected
+  const areAllSelectableSelected =
+    selectableProblemCount > 0 &&
+    selectedProblems.length === selectableProblemCount;
+
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50/50 p-6">
@@ -253,7 +438,10 @@ function DashboardPage() {
               </p>
             </div>
             <button
-              onClick={() => setShowProblemForm(!showProblemForm)}
+              onClick={() => {
+                setShowProblemForm(!showProblemForm);
+                setEditingProblem(null); // Clear any editing problem when toggling form
+              }}
               className="px-6 py-2.5 rounded-lg text-white font-medium bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-md hover:shadow-lg transform transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
               {showProblemForm ? (
@@ -287,8 +475,10 @@ function DashboardPage() {
         {showProblemForm ? (
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
             <ProblemForm
+              problem={editingProblem}
               onClose={() => {
                 setShowProblemForm(false);
+                setEditingProblem(null);
                 fetchProblems();
               }}
             />
@@ -382,12 +572,38 @@ function DashboardPage() {
               </div>
             )}
 
+            {/* Bulk Actions Bar */}
+            {selectedProblems.length > 0 && (
+              <div className="mb-4 bg-indigo-50 p-3 rounded-lg shadow-sm border border-indigo-100 flex justify-between items-center">
+                <span className="text-sm font-medium text-indigo-800">
+                  เลือก {selectedProblems.length} รายการ
+                </span>
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  ลบรายการที่เลือก
+                </button>
+              </div>
+            )}
+
             {/* Table Section */}
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr className="bg-gray-50">
+                      {/* Select All Checkbox */}
+                      <th className="w-10 px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={areAllSelectableSelected}
+                          onChange={handleSelectAll}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          title="เลือกทั้งหมดที่สามารถแก้ไขได้"
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         ลำดับ
                       </th>
@@ -421,6 +637,9 @@ function DashboardPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         สถานะ
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        จัดการ
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -428,12 +647,27 @@ function DashboardPage() {
                       const typeDetails = getProblemTypeDetails(
                         problem.problem_type
                       );
+                      const canModify = canModifyProblem(problem);
 
                       return (
                         <tr
                           key={problem.id}
                           className="hover:bg-gray-50/50 transition-colors duration-150"
                         >
+                          {/* Item Checkbox */}
+                          <td className="px-3 py-4">
+                            <input
+                              type="checkbox"
+                              disabled={!canModify}
+                              checked={selectedProblems.includes(problem.id)}
+                              onChange={() => handleSelectProblem(problem.id)}
+                              className={`rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 ${
+                                !canModify
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            />
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {(currentPage - 1) * pageSize + index + 1}
                           </td>
@@ -497,6 +731,28 @@ function DashboardPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             {renderStatusColumn(problem)}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                            {canModify && (
+                              <>
+                                <button
+                                  onClick={() => handleEditProblem(problem)}
+                                  className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                  title="แก้ไข"
+                                >
+                                  <Edit size={18} />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleDeleteProblem(problem.id)
+                                  }
+                                  className="text-red-600 hover:text-red-900 transition-colors"
+                                  title="ลบ"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -541,6 +797,21 @@ function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => {
+          confirmDialog.confirmAction?.();
+        }}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText={confirmDialog.confirmText}
+        cancelText="ยกเลิก"
+        confirmButtonClass={confirmDialog.confirmButtonClass}
+      />
     </DashboardLayout>
   );
 }

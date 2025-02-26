@@ -110,7 +110,7 @@ function UserCreateForm({ onSuccess }) {
               htmlFor="username"
               className="block text-sm font-medium text-gray-700"
             >
-              รหัสผู้ใช้
+              ชื่อผู้ใช้
             </label>
             <input
               type="text"
@@ -182,7 +182,7 @@ function UserCreateForm({ onSuccess }) {
               htmlFor="branch"
               className="block text-sm font-medium text-gray-700"
             >
-              สาขา
+              หลักสูตร
             </label>
             <select
               id="branch"

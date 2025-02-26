@@ -54,7 +54,7 @@ function EquipmentPage() {
           ) : (
             <button
               onClick={() => handleViewChange("list")}
-              className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Database className="w-4 h-4 mr-2" />
               ดูรายการครุภัณฑ์

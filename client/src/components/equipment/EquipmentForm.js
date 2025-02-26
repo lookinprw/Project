@@ -1,25 +1,7 @@
-// src/components/equipment/EquipmentForm.js
 import React, { useState, useEffect } from "react";
 import api from "../../utils/axios";
 import { useAlert } from "../../context/AlertContext";
 import ConfirmationDialog from "../common/ConfirmationDialog";
-
-// Constants for dropdowns
-const TYPE_OPTIONS = {
-  Computer: "Computer",
-  Other: "Other",
-};
-
-const STATUS_OPTIONS = {
-  active: "ใช้งานได้",
-  maintenance: "ซ่อมบำรุง",
-  inactive: "ไม่พร้อมใช้งาน",
-};
-
-const ROOM_OPTIONS = {
-  "BI Studio": "BI Studio",
-  "Co-Working": "Co-Working",
-};
 
 // Format equipment ID function
 const formatEquipmentId = (value) => {
@@ -78,8 +60,8 @@ function EquipmentForm({ equipment = null, onComplete }) {
   const [formData, setFormData] = useState({
     equipment_id: "",
     name: "",
-    type: "",
-    room: "",
+    type: "Computer",
+    room: "BI Studio",
     status: "active", // Default status
   });
 
@@ -198,13 +180,29 @@ function EquipmentForm({ equipment = null, onComplete }) {
     }
   };
 
+  // Radio button handler for type and room
+  const handleRadioChange = (field, value) => {
+    setFormData({
+      ...formData,
+      [field]: value,
+    });
+
+    // Clear validation error
+    if (validationErrors[field]) {
+      setValidationErrors({
+        ...validationErrors,
+        [field]: undefined,
+      });
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-lg font-semibold mb-6">
         {equipment ? "แก้ไขครุภัณฑ์" : "เพิ่มครุภัณฑ์ใหม่"}
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
@@ -230,7 +228,7 @@ function EquipmentForm({ equipment = null, onComplete }) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              ชื่อ
+              ชื่อครุภัณฑ์
             </label>
             <input
               type="text"
@@ -249,24 +247,31 @@ function EquipmentForm({ equipment = null, onComplete }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               ประเภท
             </label>
-            <select
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-              className={`mt-1 block w-full rounded-md border ${
-                validationErrors.type ? "border-red-500" : "border-gray-300"
-              } px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500`}
-            >
-              <option value="">เลือกประเภท</option>
-              {Object.entries(TYPE_OPTIONS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <div className="flex space-x-4">
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="type"
+                  checked={formData.type === "Computer"}
+                  onChange={() => handleRadioChange("type", "Computer")}
+                  className="form-radio text-indigo-600 h-4 w-4"
+                />
+                <span className="ml-2">Computer</span>
+              </label>
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="type"
+                  checked={formData.type === "Other"}
+                  onChange={() => handleRadioChange("type", "Other")}
+                  className="form-radio text-indigo-600 h-4 w-4"
+                />
+                <span className="ml-2">Other</span>
+              </label>
+            </div>
             {validationErrors.type && (
               <p className="mt-1 text-sm text-red-600">
                 {validationErrors.type}
@@ -275,24 +280,31 @@ function EquipmentForm({ equipment = null, onComplete }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               ห้อง
             </label>
-            <select
-              name="room"
-              value={formData.room}
-              onChange={handleChange}
-              className={`mt-1 block w-full rounded-md border ${
-                validationErrors.room ? "border-red-500" : "border-gray-300"
-              } px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500`}
-            >
-              <option value="">เลือกห้อง</option>
-              {Object.entries(ROOM_OPTIONS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <div className="flex space-x-4">
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="room"
+                  checked={formData.room === "BI Studio"}
+                  onChange={() => handleRadioChange("room", "BI Studio")}
+                  className="form-radio text-indigo-600 h-4 w-4"
+                />
+                <span className="ml-2">BI Studio</span>
+              </label>
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="room"
+                  checked={formData.room === "Co-Working"}
+                  onChange={() => handleRadioChange("room", "Co-Working")}
+                  className="form-radio text-indigo-600 h-4 w-4"
+                />
+                <span className="ml-2">Co-Working</span>
+              </label>
+            </div>
             {validationErrors.room && (
               <p className="mt-1 text-sm text-red-600">
                 {validationErrors.room}
@@ -301,22 +313,51 @@ function EquipmentForm({ equipment = null, onComplete }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               สถานะ
             </label>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 
-                       focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              {Object.entries(STATUS_OPTIONS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col space-y-2">
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="status"
+                  checked={formData.status === "active"}
+                  onChange={() => handleRadioChange("status", "active")}
+                  className="form-radio text-green-600 h-4 w-4"
+                />
+                <span className="ml-2">ใช้งานได้</span>
+              </label>
+              <label className="inline-flex items-center">
+                <input
+                  type="radio"
+                  name="status"
+                  checked={formData.status === "inactive"}
+                  onChange={() => handleRadioChange("status", "inactive")}
+                  className="form-radio text-red-600 h-4 w-4"
+                />
+                <span className="ml-2">ไม่พร้อมใช้งาน</span>
+              </label>
+              <label
+                className={`inline-flex items-center ${
+                  !equipment ? "opacity-50" : ""
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="status"
+                  checked={formData.status === "maintenance"}
+                  onChange={() => handleRadioChange("status", "maintenance")}
+                  className="form-radio text-yellow-600 h-4 w-4"
+                  disabled={!equipment} // Disable if this is a new equipment
+                />
+                <span className="ml-2">ซ่อมบำรุง</span>
+                {!equipment && (
+                  <span className="ml-2 text-xs text-gray-500">
+                    (จะถูกตั้งโดยอัตโนมัติเมื่อมีการรายงานปัญหา)
+                  </span>
+                )}
+              </label>
+            </div>
             {validationErrors.status && (
               <p className="mt-1 text-sm text-red-600">
                 {validationErrors.status}
@@ -329,17 +370,14 @@ function EquipmentForm({ equipment = null, onComplete }) {
           <button
             type="button"
             onClick={() => onComplete()}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 
-                     focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             ยกเลิก
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 
-                     focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 
-                     disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
               ? "กำลังบันทึก..."

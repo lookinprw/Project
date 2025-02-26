@@ -13,7 +13,7 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
   const [selectedId, setSelectedId] = useState(problem?.status_id);
 
   // Filter statuses for equipment assistant
-  const filteredStatuses = statuses.filter(status => {
+  const filteredStatuses = statuses.filter((status) => {
     if (user?.role === "equipment_assistant") {
       // Exclude status IDs 7 (กำลังส่งไปศูนย์คอม) and 8 (ชำรุดเสียหาย)
       return ![7, 8].includes(status.id);
@@ -23,7 +23,7 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
 
   const handleChange = (e) => {
     const statusId = parseInt(e.target.value);
-    
+
     // If not assigned and trying to change status
     if (!problem.assigned_to && problem.status_id === 1) {
       setError("กรุณารับงานก่อนเปลี่ยนสถานะ");
@@ -32,13 +32,15 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
     }
 
     // Special status handling
-    if (statusId === 7) { // Computer Center
+    if (statusId === 7) {
+      // Computer Center
       setSelectedId(statusId);
       setShowWarningDialog(true);
       return;
     }
 
-    if (statusId === 4) { // Cannot Fix
+    if (statusId === 4) {
+      // Cannot Fix
       setSelectedId(statusId);
       setShowCommentModal(true);
       return;
@@ -65,7 +67,7 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
     try {
       const response = await api.patch(`/problems/${problem.id}/status`, {
         status_id: statusId,
-        comment: commentText
+        comment: commentText,
       });
 
       if (response.data.success) {
@@ -92,29 +94,51 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
 
   if (!problem) return null;
 
+  // Find current status object
+  const currentStatus =
+    statuses.find((s) => s.id === parseInt(selectedId)) || {};
+
   return (
     <div>
-      <select
-        value={selectedId}
-        onChange={handleChange}
-        disabled={updating || (!problem.assigned_to && problem.status_id === 1)}
-        className={`mt-1 block w-40 rounded-md text-sm font-medium ${
-          !problem.assigned_to && problem.status_id === 1 
-            ? 'opacity-50 cursor-not-allowed' 
-            : ''
-        }`}
-        style={{ backgroundColor: problem.status_color }}
-      >
-        {filteredStatuses.map(status => (
-          <option 
-            key={status.id}
-            value={status.id}
-            style={{ backgroundColor: status.color }}
-          >
-            {status.name}
-          </option>
-        ))}
-      </select>
+      {/* Improved select with better color pairing */}
+      <div className="flex flex-col items-start">
+        <select
+          value={selectedId}
+          onChange={handleChange}
+          disabled={
+            updating || (!problem.assigned_to && problem.status_id === 1)
+          }
+          className={`block w-40 px-2 py-1 text-sm font-medium border rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+            !problem.assigned_to && problem.status_id === 1
+              ? "opacity-50 cursor-not-allowed"
+              : ""
+          }`}
+          style={{
+            backgroundColor: "white",
+            color: "#1F2937",
+            borderColor: currentStatus.color || "#D1D5DB",
+          }}
+        >
+          {filteredStatuses.map((status) => (
+            <option
+              key={status.id}
+              value={status.id}
+              style={{ backgroundColor: "white", color: "#1F2937" }}
+            >
+              {status.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Small status indicator with dot to show color */}
+        <div className="flex items-center mt-1 ml-1">
+          <div
+            className="w-2 h-2 rounded-full mr-1"
+            style={{ backgroundColor: currentStatus.color }}
+          ></div>
+          <span className="text-xs text-gray-500">{currentStatus.name}</span>
+        </div>
+      </div>
 
       {error && (
         <p className="mt-1 text-xs text-red-600 bg-red-50 p-1 rounded">
@@ -128,8 +152,12 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
             <div className="flex items-start space-x-3">
               <AlertCircle className="h-6 w-6 text-yellow-500 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">ยืนยันการส่งซ่อม</h3>
-                <p className="mt-2 text-sm text-gray-500">คุณต้องการส่งครุภัณฑ์นี้ไปซ่อมที่ศูนย์คอมพิวเตอร์ใช่หรือไม่?</p>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  ยืนยันการส่งซ่อม
+                </h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  คุณต้องการส่งครุภัณฑ์นี้ไปซ่อมที่ศูนย์คอมพิวเตอร์ใช่หรือไม่?
+                </p>
                 <ul className="mt-2 text-sm text-gray-500 list-disc ml-4 space-y-1">
                   <li>ตรวจสอบปัญหาเบื้องต้นแล้ว</li>
                   <li>ไม่สามารถซ่อมได้ด้วยทีมงานภายใน</li>
@@ -185,7 +213,9 @@ export function StatusSelect({ problem, statuses = [], onStatusChange }) {
                 onChange={(e) => setComment(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 rows="4"
-                placeholder={selectedId === 7 ? "รายละเอียดการส่งซ่อม..." : "ระบุเหตุผล..."}
+                placeholder={
+                  selectedId === 7 ? "รายละเอียดการส่งซ่อม..." : "ระบุเหตุผล..."
+                }
                 required
               />
 

@@ -1,6 +1,12 @@
 // src/components/equipment/EquipmentList.js
 import React, { useState, useEffect } from "react";
-import { Edit, Trash2, Search as SearchIcon, Filter } from "lucide-react";
+import {
+  Edit,
+  Trash2,
+  Search as SearchIcon,
+  Filter,
+  CheckSquare,
+} from "lucide-react";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
 import { useAlert } from "../../context/AlertContext";
@@ -15,6 +21,10 @@ function EquipmentList({ onEdit }) {
   // State for equipment data and UI
   const [equipment, setEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Selection state for bulk operations
+  const [selectedEquipment, setSelectedEquipment] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,6 +49,7 @@ function EquipmentList({ onEdit }) {
     isLoading: false,
     confirmButtonClass: "",
     confirmText: "",
+    confirmAction: null,
   });
 
   // Handle search input with debounce
@@ -84,6 +95,9 @@ function EquipmentList({ onEdit }) {
       if (response.data.success) {
         setEquipment(response.data.data || []);
         setTotalPages(response.data.totalPages || 1);
+        // Reset selections when equipment changes
+        setSelectedEquipment([]);
+        setSelectAll(false);
       }
     } catch (error) {
       console.error("Error fetching equipment:", error);
@@ -102,6 +116,7 @@ function EquipmentList({ onEdit }) {
       setLoading(false);
     }
   };
+
   // Fetch data when page, search, or filters change
   useEffect(() => {
     fetchEquipment();
@@ -123,14 +138,15 @@ function EquipmentList({ onEdit }) {
       isLoading: false,
       confirmButtonClass: "bg-red-600 hover:bg-red-700",
       confirmText: "ลบ",
+      confirmAction: () => handleConfirmDelete(id),
     });
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async (id) => {
     setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
 
     try {
-      const response = await api.delete(`/equipment/${confirmDialog.itemId}`);
+      const response = await api.delete(`/equipment/${id}`);
       if (response.data.success) {
         showSuccess(`ลบครุภัณฑ์ "${confirmDialog.itemName}" สำเร็จ`);
         fetchEquipment(); // Refresh the list
@@ -145,6 +161,75 @@ function EquipmentList({ onEdit }) {
         isLoading: false,
       }));
     }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = () => {
+    if (selectedEquipment.length === 0) {
+      showError("กรุณาเลือกรายการที่ต้องการลบ");
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการลบรายการที่เลือก",
+      message: `คุณต้องการลบครุภัณฑ์ที่เลือกจำนวน ${selectedEquipment.length} รายการใช่หรือไม่?`,
+      isLoading: false,
+      confirmButtonClass: "bg-red-600 hover:bg-red-700",
+      confirmText: "ลบทั้งหมด",
+      confirmAction: confirmBulkDelete,
+    });
+  };
+
+  // Confirm and execute bulk deletion
+  const confirmBulkDelete = async () => {
+    setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      // Delete equipment one by one
+      const deletePromises = selectedEquipment.map((id) =>
+        api.delete(`/equipment/${id}`)
+      );
+
+      await Promise.all(deletePromises);
+
+      showSuccess(`ลบครุภัณฑ์ทั้งหมด ${selectedEquipment.length} รายการสำเร็จ`);
+      setSelectedEquipment([]);
+      fetchEquipment();
+    } catch (error) {
+      console.error("Error deleting equipment:", error);
+      showError(error.response?.data?.message || "ไม่สามารถลบครุภัณฑ์ได้");
+    } finally {
+      setConfirmDialog((prev) => ({
+        ...prev,
+        isOpen: false,
+        isLoading: false,
+      }));
+    }
+  };
+
+  // Handle selecting/deselecting individual equipment
+  const handleSelectEquipment = (equipmentId) => {
+    setSelectedEquipment((prev) => {
+      if (prev.includes(equipmentId)) {
+        return prev.filter((id) => id !== equipmentId);
+      } else {
+        return [...prev, equipmentId];
+      }
+    });
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = () => {
+    if (selectAll) {
+      // Deselect all
+      setSelectedEquipment([]);
+    } else {
+      // Select all equipment
+      const allEquipmentIds = equipment.map((item) => item.id);
+      setSelectedEquipment(allEquipmentIds);
+    }
+    setSelectAll(!selectAll);
   };
 
   // Handle page change
@@ -290,16 +375,44 @@ function EquipmentList({ onEdit }) {
           </div>
         )}
 
+        {/* Bulk Actions Bar */}
+        {selectedEquipment.length > 0 && isEquipmentManager && (
+          <div className="mb-4 bg-indigo-50 p-3 rounded-lg shadow-sm border border-indigo-100 flex justify-between items-center">
+            <span className="text-sm font-medium text-indigo-800">
+              เลือก {selectedEquipment.length} รายการ
+            </span>
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center"
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              ลบรายการที่เลือก
+            </button>
+          </div>
+        )}
+
         {/* Equipment Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {/* Add checkbox column for all users */}
+                {isEquipmentManager && (
+                  <th className="w-10 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectAll && equipment.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      title="เลือกทั้งหมด"
+                    />
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   รหัสครุภัณฑ์
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ชื่อ
+                  ชื่อครุภัณฑ์
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   ประเภท
@@ -318,6 +431,17 @@ function EquipmentList({ onEdit }) {
             <tbody className="bg-white divide-y divide-gray-200">
               {equipment.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
+                  {/* Add checkbox for each row */}
+                  {isEquipmentManager && (
+                    <td className="px-3 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedEquipment.includes(item.id)}
+                        onChange={() => handleSelectEquipment(item.id)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {item.equipment_id}
                   </td>
@@ -386,7 +510,9 @@ function EquipmentList({ onEdit }) {
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen}
         onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-        onConfirm={handleConfirmDelete}
+        onConfirm={() => {
+          confirmDialog.confirmAction?.();
+        }}
         title={confirmDialog.title}
         message={confirmDialog.message}
         isLoading={confirmDialog.isLoading}

@@ -1,5 +1,5 @@
 // components/equipment/CsvImporter.js
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Upload, X, AlertCircle, CheckCircle } from "lucide-react";
 import api from "../../utils/axios";
 import Alert from "../common/Alert";
@@ -36,11 +36,12 @@ function CsvImporter({ onComplete }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewData, setPreviewData] = useState([]);
   const [validationErrors, setValidationErrors] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
   const expectedColumns = ["equipment_id", "name", "type", "room", "status"];
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
+  const processFile = (selectedFile) => {
     setError("");
     setSuccess("");
     setValidationErrors([]);
@@ -150,6 +151,43 @@ function CsvImporter({ onComplete }) {
     reader.readAsText(selectedFile);
   };
 
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    processFile(selectedFile);
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files && files.length > 0) {
+      processFile(files[0]);
+    }
+  };
+
   const handleImport = async () => {
     if (validationErrors.length > 0) {
       setError("กรุณาแก้ไขข้อผิดพลาดก่อนนำเข้าข้อมูล");
@@ -241,9 +279,21 @@ function CsvImporter({ onComplete }) {
       )}
 
       {!file ? (
-        <div className="mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+        <div
+          className={`mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 ${
+            isDragging ? "border-indigo-300 bg-indigo-50" : "border-gray-300"
+          } border-dashed rounded-md transition-colors duration-200`}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <div className="space-y-1 text-center">
-            <Upload className="mx-auto h-12 w-12 text-gray-400" />
+            <Upload
+              className={`mx-auto h-12 w-12 ${
+                isDragging ? "text-indigo-500" : "text-gray-400"
+              }`}
+            />
             <div className="flex text-sm text-gray-600">
               <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500">
                 <span>อัพโหลดไฟล์ CSV</span>
@@ -253,6 +303,7 @@ function CsvImporter({ onComplete }) {
                   type="file"
                   accept=".csv"
                   className="sr-only"
+                  ref={fileInputRef}
                   onChange={handleFileChange}
                 />
               </label>
@@ -285,6 +336,9 @@ function CsvImporter({ onComplete }) {
                 setCsvData([]);
                 setPreviewData([]);
                 setValidationErrors([]);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = "";
+                }
               }}
               className="text-gray-400 hover:text-gray-500"
             >

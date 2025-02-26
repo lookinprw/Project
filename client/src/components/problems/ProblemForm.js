@@ -3,8 +3,9 @@ import { Upload, X, Search as SearchIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useAlert } from "../../context/AlertContext";
 import api from "../../utils/axios";
+import ConfirmationDialog from "../common/ConfirmationDialog";
 
-function ProblemForm({ onClose }) {
+function ProblemForm({ problem = null, onClose }) {
   const { user: currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useAlert();
 
@@ -23,6 +24,14 @@ function ProblemForm({ onClose }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [similarProblems, setSimilarProblems] = useState([]);
   const [showSimilarProblems, setShowSimilarProblems] = useState(false);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    isLoading: false,
+  });
 
   const PROBLEM_TYPES = [
     {
@@ -51,11 +60,11 @@ function ProblemForm({ onClose }) {
       value: "other",
       label: "ปัญหาอื่นๆ",
       icon: "❓",
-      examples: ["ปัญหาที่ไม่เกี่ยวกับฮาร์ดแวร์และซอฟแวร์"],
+      examples: ["ปัญหาที่ไม่เกี่ยวกับฮาร์ดแวร์และซอฟต์แวร์"],
     },
   ];
 
-  // Fixed filtering logic with proper null checks
+  // Fix filtering logic with proper null checks
   useEffect(() => {
     if (!Array.isArray(equipment)) return;
 
@@ -77,6 +86,23 @@ function ProblemForm({ onClose }) {
     setFilteredEquipment(filtered);
   }, [searchQuery, equipment]);
 
+  // Initialize form data if editing an existing problem
+  useEffect(() => {
+    if (problem) {
+      setFormData({
+        equipment_id: problem.equipment_id || "",
+        description: problem.description || "",
+        problem_type: problem.problem_type || "hardware",
+      });
+
+      // If the problem has an image, set the preview URL
+      if (problem.image_url) {
+        // Assuming there's an API endpoint to fetch the image
+        setPreviewUrl(`/api/uploads/${problem.image_url}`);
+      }
+    }
+  }, [problem]);
+
   useEffect(() => {
     const fetchEquipment = async () => {
       try {
@@ -84,6 +110,14 @@ function ProblemForm({ onClose }) {
         if (response.data.success) {
           setEquipment(response.data.data || []);
           setFilteredEquipment(response.data.data || []);
+
+          // If editing an existing problem, select the equipment
+          if (problem && problem.equipment_id) {
+            const selected = response.data.data.find(
+              (eq) => eq.equipment_id === problem.equipment_id
+            );
+            setSelectedEquipment(selected || null);
+          }
         }
       } catch (error) {
         console.error("Error fetching equipment:", error);
@@ -94,7 +128,7 @@ function ProblemForm({ onClose }) {
     };
 
     fetchEquipment();
-  }, [showError]);
+  }, [problem, showError]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -148,6 +182,9 @@ function ProblemForm({ onClose }) {
   };
 
   const checkSimilarProblems = async (equipment_id, problem_type) => {
+    // Skip similar problem check when editing
+    if (problem) return false;
+
     try {
       const activeStatusIds = [1, 2, 7]; // Pending, In Progress, Computer Center
       const response = await api.get(
@@ -192,12 +229,29 @@ function ProblemForm({ onClose }) {
     if (!validateForm()) {
       return;
     }
+
+    // If editing an existing problem, show confirmation dialog
+    if (problem) {
+      setConfirmDialog({
+        isOpen: true,
+        title: "ยืนยันการแก้ไขรายการ",
+        message: "คุณต้องการบันทึกการแก้ไขรายการนี้ใช่หรือไม่?",
+        isLoading: false,
+      });
+      return;
+    }
+
+    // For new problems, check for similar ones
     const hasSimilar = await checkSimilarProblems(
       formData.equipment_id,
       formData.problem_type
     );
     if (hasSimilar) return;
 
+    submitProblem();
+  };
+
+  const submitProblem = async () => {
     setIsSubmitting(true);
 
     try {
@@ -210,15 +264,27 @@ function ProblemForm({ onClose }) {
         formDataToSend.append("image", file);
       }
 
-      const response = await api.post("/problems", formDataToSend, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      let response;
+
+      if (problem) {
+        // If editing, use PUT or PATCH request to update
+        response = await api.put(`/problems/${problem.id}`, formDataToSend, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } else {
+        // If creating new, use POST request
+        response = await api.post("/problems", formDataToSend, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      }
 
       if (response.data.success) {
         // Show success message
-        showSuccess("แจ้งปัญหาสำเร็จแล้ว");
+        showSuccess(problem ? "แก้ไขรายการสำเร็จ" : "แจ้งปัญหาสำเร็จแล้ว");
 
         // Wait a moment before closing the form
         setTimeout(() => {
@@ -241,6 +307,12 @@ function ProblemForm({ onClose }) {
       }
     } finally {
       setIsSubmitting(false);
+      setConfirmDialog({
+        isOpen: false,
+        title: "",
+        message: "",
+        isLoading: false,
+      });
     }
   };
 
@@ -287,40 +359,7 @@ function ProblemForm({ onClose }) {
             ยกเลิก
           </button>
           <button
-            onClick={async () => {
-              setShowSimilarProblems(false);
-              const formDataToSend = new FormData();
-              formDataToSend.append("equipment_id", formData.equipment_id);
-              formDataToSend.append("description", formData.description);
-              formDataToSend.append("problem_type", formData.problem_type);
-
-              if (file) {
-                formDataToSend.append("image", file);
-              }
-
-              setIsSubmitting(true);
-              try {
-                const response = await api.post("/problems", formDataToSend, {
-                  headers: {
-                    "Content-Type": "multipart/form-data",
-                  },
-                });
-
-                if (response.data.success) {
-                  showSuccess("แจ้งปัญหาสำเร็จแล้ว");
-                  setTimeout(() => {
-                    onClose();
-                  }, 1000);
-                }
-              } catch (error) {
-                showError(
-                  error.response?.data?.message ||
-                    "เกิดข้อผิดพลาดในการส่งข้อมูล"
-                );
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
+            onClick={submitProblem}
             className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
           >
             แจ้งปัญหาใหม่
@@ -333,7 +372,9 @@ function ProblemForm({ onClose }) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       {showSimilarProblems && <SimilarProblemsModal />}
-      <h2 className="text-xl font-bold mb-6">แจ้งปัญหาครุภัณฑ์</h2>
+      <h2 className="text-xl font-bold mb-6">
+        {problem ? "แก้ไขรายการแจ้งปัญหา" : "แจ้งปัญหาครุภัณฑ์"}
+      </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Problem Type Selection - Primary Focus */}
@@ -400,6 +441,7 @@ function ProblemForm({ onClose }) {
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
+              disabled={problem} // Disable if editing existing problem
             >
               <option value="">เลือกครุภัณฑ์</option>
               {filteredEquipment.map((eq) => (
@@ -442,10 +484,7 @@ function ProblemForm({ onClose }) {
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      setFile(null);
-                      setPreviewUrl(null);
-                    }}
+                    onClick={handleRemoveFile}
                     className="absolute top-0 right-0 -mr-2 -mt-2 bg-red-100 text-red-600 rounded-full p-1 hover:bg-red-200"
                   >
                     <X size={16} />
@@ -491,10 +530,27 @@ function ProblemForm({ onClose }) {
             disabled={isSubmitting}
             className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
           >
-            {isSubmitting ? "กำลังส่งข้อมูล..." : "แจ้งปัญหา"}
+            {isSubmitting
+              ? "กำลังส่งข้อมูล..."
+              : problem
+              ? "บันทึกการแก้ไข"
+              : "แจ้งปัญหา"}
           </button>
         </div>
       </form>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={submitProblem}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText="บันทึก"
+        cancelText="ยกเลิก"
+        confirmButtonClass="bg-indigo-600 hover:bg-indigo-700"
+      />
     </div>
   );
 }

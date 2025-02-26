@@ -118,7 +118,7 @@ function LoginPage() {
                 htmlFor="username"
                 className="block text-sm font-medium text-gray-700"
               >
-                รหัสผู้ใช้
+                ชื่อผู้ใช้
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

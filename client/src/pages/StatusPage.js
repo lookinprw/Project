@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { Trash2, Edit } from "lucide-react";
 import api from "../utils/axios";
+import { StatusBadge } from "../components/common/StatusBadge";
 
 // Define the IDs of original statuses that cannot be deleted
 const LOCKED_STATUS_IDS = [1, 2, 3, 4, 7, 8];
@@ -64,6 +65,41 @@ function StatusPage() {
         );
       }
     }
+  };
+
+  // Function to show status preview with consistent styling
+  const renderStatusPreview = (color) => {
+    return (
+      <div className="mt-2 flex flex-col gap-2">
+        <p className="text-sm text-gray-500">ตัวอย่างการแสดงผล:</p>
+        <div className="flex items-center space-x-4">
+          <span
+            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border"
+            style={{ borderColor: color }}
+          >
+            <span
+              className="w-2 h-2 rounded-full mr-1.5"
+              style={{ backgroundColor: color }}
+            ></span>
+            {formData.name || "ตัวอย่างสถานะ"}
+          </span>
+
+          <div className="flex items-center">
+            <select
+              className="block w-40 px-2 py-1 text-sm font-medium border rounded-md"
+              style={{
+                backgroundColor: "white",
+                color: "#1F2937",
+                borderColor: color,
+              }}
+              disabled
+            >
+              <option>{formData.name || "ตัวอย่างสถานะ"}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loading)
@@ -131,6 +167,9 @@ function StatusPage() {
                 }
                 className="w-full rounded-md border-gray-300 h-10"
               />
+
+              {/* Status preview */}
+              {renderStatusPreview(formData.color)}
             </div>
 
             <div className="flex justify-end space-x-3">
@@ -170,12 +209,10 @@ function StatusPage() {
                   className="flex items-center justify-between p-3 border rounded-lg"
                 >
                   <div className="flex items-center space-x-3">
-                    <div
-                      className="w-6 h-6 rounded-full"
-                      style={{ backgroundColor: status.color }}
-                    />
-                    <div>
-                      <p className="font-medium">{status.name}</p>
+                    {/* Use our consistent StatusBadge component */}
+                    <StatusBadge status={status} />
+
+                    <div className="ml-2">
                       <p className="text-sm text-gray-500">
                         {status.description}
                       </p>

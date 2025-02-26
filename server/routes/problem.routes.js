@@ -8,11 +8,13 @@ const multer = require("multer");
 const { auth, checkRole } = require("../middleware/auth");
 const uploadDir = path.join(__dirname, "../uploads");
 
+// Ensure upload directory exists
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
@@ -38,11 +40,11 @@ const upload = multer({
       path.extname(file.originalname).toLowerCase()
     );
     const validMime = allowedTypes.test(file.mimetype);
-    cb(
-      null,
-      (validExt && validMime) ||
-        new Error("เฉพาะไฟล์ .png, .jpg และ .jpeg เท่านั้น")
-    );
+
+    if (!validExt || !validMime) {
+      return cb(new Error("เฉพาะไฟล์ .png, .jpg และ .jpeg เท่านั้น"), false);
+    }
+    cb(null, true);
   },
 });
 
@@ -79,116 +81,159 @@ router.get("/", auth, async (req, res) => {
 });
 
 // Create new problem
-router.post("/", auth, upload.single("image"), async (req, res) => {
+router.post("/", auth, async (req, res) => {
+  // Handle file upload with error handling
+  const uploadMiddleware = upload.single("image");
+
+  uploadMiddleware(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message || "File upload error",
+      });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const { equipment_id, description, problem_type } = req.body;
+      const reported_by = req.user.id;
+
+      // Validate inputs
+      if (!equipment_id) {
+        throw new Error("กรุณาระบุรหัสครุภัณฑ์");
+      }
+
+      if (!description || description.length < 5) {
+        throw new Error("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
+      }
+
+      // Validate problem_type
+      const validTypes = ["hardware", "software", "other"];
+      if (!problem_type || !validTypes.includes(problem_type)) {
+        throw new Error("ประเภทปัญหาไม่ถูกต้อง");
+      }
+
+      // Get equipment room
+      const [equipment] = await connection.execute(
+        "SELECT room FROM equipment WHERE equipment_id = ?",
+        [equipment_id]
+      );
+
+      // Get default status (id = 1 for รอดำเนินการ)
+      const [defaultStatus] = await connection.execute(
+        "SELECT id FROM status WHERE id = 1 LIMIT 1"
+      );
+
+      if (!defaultStatus[0]) {
+        throw new Error("ไม่พบสถานะเริ่มต้น");
+      }
+
+      // Safely handle file info
+      const imageFilename = req.file ? req.file.filename : null;
+
+      const [result] = await connection.execute(
+        `INSERT INTO problems (
+          equipment_id, 
+          description, 
+          status_id, 
+          image_url, 
+          reported_by, 
+          problem_type
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          equipment_id,
+          description,
+          defaultStatus[0].id,
+          imageFilename,
+          reported_by,
+          problem_type,
+        ]
+      );
+
+      await connection.commit();
+      res.status(201).json({ success: true, id: result.insertId });
+    } catch (error) {
+      await connection.rollback();
+
+      // If there was a file uploaded but DB operation failed, remove the file
+      if (req.file && req.file.filename) {
+        const filePath = path.join(uploadDir, req.file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      res.status(500).json({
+        success: false,
+        message: error.message || "เกิดข้อผิดพลาดในการแจ้งปัญหา",
+      });
+    } finally {
+      connection.release();
+    }
+  });
+});
+
+// Delete problem - fixed permission handling
+router.delete("/:id", auth, async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    const { equipment_id, description, problem_type } = req.body;
-    const reported_by = req.user.id;
 
-    // Validate length
-    if (description.length < 5) {
-      throw new Error("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
-    }
-
-    // Validate problem_type
-    const validTypes = ["hardware", "software", "other"];
-    if (!validTypes.includes(problem_type)) {
-      throw new Error("ประเภทปัญหาไม่ถูกต้อง");
-    }
-
-    // Get equipment room
-    const [equipment] = await connection.execute(
-      "SELECT room FROM equipment WHERE equipment_id = ?",
-      [equipment_id]
+    // First check if problem exists
+    const [problems] = await connection.execute(
+      "SELECT * FROM problems WHERE id = ?",
+      [req.params.id]
     );
 
-    // Get default status (id = 1 for รอดำเนินการ)
-    const [defaultStatus] = await connection.execute(
-      "SELECT id FROM status WHERE id = 1 LIMIT 1"
-    );
-
-    if (!defaultStatus[0]) {
-      throw new Error("ไม่พบสถานะเริ่มต้น");
+    if (problems.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบรายการที่ต้องการลบ",
+      });
     }
 
-    const [result] = await connection.execute(
-      `INSERT INTO problems (
-        equipment_id, 
-        description, 
-        status_id, 
-        image_url, 
-        reported_by, 
-        problem_type
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        equipment_id,
-        description,
-        defaultStatus[0].id,
-        req.file?.filename || null,
-        reported_by,
-        problem_type,
-      ]
-    );
+    const problem = problems[0];
+
+    // Check permissions
+    const hasPermission =
+      req.user.role === "admin" ||
+      req.user.role === "equipment_manager" ||
+      (problem.reported_by &&
+        parseInt(problem.reported_by) === parseInt(req.user.id));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permissions.",
+      });
+    }
+
+    // Delete any associated images if they exist
+    if (problem.image_url) {
+      const imagePath = path.join(uploadDir, problem.image_url);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
+
+    // Delete the problem
+    await connection.execute("DELETE FROM problems WHERE id = ?", [
+      req.params.id,
+    ]);
 
     await connection.commit();
-    res.status(201).json({ success: true, id: result.insertId });
+    res.json({ success: true, message: "ลบรายการสำเร็จ" });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({
       success: false,
-      message: error.message || "เกิดข้อผิดพลาดในการแจ้งปัญหา",
+      message: error.message || "เกิดข้อผิดพลาดในการลบข้อมูล",
     });
   } finally {
     connection.release();
   }
 });
-
-router.delete(
-  "/:id",
-  auth,
-  checkRole(["admin", "equipment_manager"]),
-  async (req, res) => {
-    const connection = await db.getConnection();
-    try {
-      await connection.beginTransaction();
-
-      // First check if problem exists
-      const [problem] = await connection.execute(
-        "SELECT * FROM problems WHERE id = ?",
-        [req.params.id]
-      );
-
-      if (problem.length === 0) {
-        throw new Error("ไม่พบรายการที่ต้องการลบ");
-      }
-
-      // Delete any associated images if they exist
-      if (problem[0].image_url) {
-        const imagePath = path.join(uploadDir, problem[0].image_url);
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
-      }
-
-      // Delete the problem
-      await connection.execute("DELETE FROM problems WHERE id = ?", [
-        req.params.id,
-      ]);
-
-      await connection.commit();
-      res.json({ success: true, message: "ลบรายการสำเร็จ" });
-    } catch (error) {
-      await connection.rollback();
-      res.status(500).json({
-        success: false,
-        message: error.message || "เกิดข้อผิดพลาดในการลบข้อมูล",
-      });
-    } finally {
-      connection.release();
-    }
-  }
-);
 
 // Update problem status
 router.patch("/:id/status", auth, async (req, res) => {
@@ -197,6 +242,10 @@ router.patch("/:id/status", auth, async (req, res) => {
     await connection.beginTransaction();
     const { id } = req.params;
     const { status_id, comment } = req.body;
+
+    if (!status_id) {
+      throw new Error("กรุณาระบุสถานะ");
+    }
 
     // First get the problem and equipment details
     const [problems] = await connection.execute(
@@ -225,6 +274,8 @@ router.patch("/:id/status", auth, async (req, res) => {
       case 3: // เสร็จสิ้น
         equipmentStatus = "active";
         break;
+      default:
+        equipmentStatus = null;
     }
 
     // Update equipment status if needed
@@ -242,7 +293,7 @@ router.patch("/:id/status", auth, async (req, res) => {
        comment = ?,
        updated_at = CURRENT_TIMESTAMP 
        WHERE id = ?`,
-      [status_id, comment, id]
+      [status_id, comment || null, id]
     );
 
     await connection.commit();
@@ -264,6 +315,16 @@ router.patch("/:id/assign", auth, async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // Check if problem exists
+    const [problems] = await connection.execute(
+      "SELECT * FROM problems WHERE id = ?",
+      [req.params.id]
+    );
+
+    if (problems.length === 0) {
+      throw new Error("ไม่พบรายการที่ต้องการรับมอบหมาย");
+    }
+
     const inProgressStatusId = 2; // In Progress status
 
     await connection.execute(
@@ -279,7 +340,78 @@ router.patch("/:id/assign", auth, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     await connection.rollback();
-    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาด" });
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาด",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// Update problem
+router.put("/:id", auth, async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { id } = req.params;
+    const { description, problem_type } = req.body;
+
+    // Validate inputs
+    if (!description || description.length < 5) {
+      throw new Error("กรุณากรอกรายละเอียดปัญหาอย่างน้อย 5 ตัวอักษร");
+    }
+
+    // Validate problem_type
+    const validTypes = ["hardware", "software", "other"];
+    if (!problem_type || !validTypes.includes(problem_type)) {
+      throw new Error("ประเภทปัญหาไม่ถูกต้อง");
+    }
+
+    // Get existing problem to check permissions
+    const [problems] = await connection.execute(
+      "SELECT * FROM problems WHERE id = ?",
+      [id]
+    );
+
+    if (problems.length === 0) {
+      throw new Error("ไม่พบรายการที่ต้องการแก้ไข");
+    }
+
+    const problem = problems[0];
+
+    // Check permissions - admin, equipment_manager or own problem
+    const hasPermission =
+      req.user.role === "admin" ||
+      req.user.role === "equipment_manager" ||
+      (problem.reported_by &&
+        parseInt(problem.reported_by) === parseInt(req.user.id));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permissions.",
+      });
+    }
+
+    // Update problem
+    await connection.execute(
+      `UPDATE problems SET 
+         description = ?, 
+         problem_type = ?,
+         updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [description, problem_type, id]
+    );
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการแก้ไขรายการ",
+    });
   } finally {
     connection.release();
   }
@@ -321,7 +453,7 @@ router.get(
   }
 );
 
-// Get unfixable problems
+// Get unfixable problems PDF
 router.get(
   "/unfixable/pdf",
   auth,
@@ -651,12 +783,6 @@ router.post("/:id/join", auth, async (req, res) => {
   }
 });
 
-// Add this to your server/routes/problem.routes.js
-
-// Get paginated problems
-// Add this to your server/routes/problem.routes.js
-
-// Get paginated problems
 router.get("/paginated", auth, async (req, res) => {
   try {
     // Basic pagination parameters
@@ -773,6 +899,314 @@ router.get("/paginated", auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "เกิดข้อผิดพลาดในการดึงข้อมูล",
+      error: error.message,
+    });
+  }
+});
+
+// Get problem details by ID
+router.get("/:id", auth, async (req, res) => {
+  try {
+    const [problems] = await db.execute(
+      `
+      SELECT p.*,
+             e.name as equipment_name,
+             e.equipment_id,
+             e.status as equipment_status,
+             e.room as equipment_room,
+             s.name as status_name,
+             s.color as status_color,
+             CONCAT(u.firstname, ' ', u.lastname) as reporter_name,
+             CONCAT(a.firstname, ' ', a.lastname) as assigned_to_name,
+             p.problem_type
+      FROM problems p
+      LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN users u ON p.reported_by = u.id
+      LEFT JOIN users a ON p.assigned_to = a.id
+      LEFT JOIN status s ON p.status_id = s.id
+      WHERE p.id = ?
+    `,
+      [req.params.id]
+    );
+
+    if (problems.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบรายการที่ต้องการ",
+      });
+    }
+
+    // Check if the user has permission to view this problem
+    const problem = problems[0];
+    const hasPermission =
+      req.user.role === "admin" ||
+      req.user.role === "equipment_manager" ||
+      req.user.role === "equipment_assistant" ||
+      (problem.reported_by &&
+        parseInt(problem.reported_by) === parseInt(req.user.id));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permissions.",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: problem,
+    });
+  } catch (error) {
+    console.error("Error fetching problem details:", error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงข้อมูล",
+      error: error.message,
+    });
+  }
+});
+
+// Get image
+router.get("/image/:filename", auth, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const imagePath = path.join(uploadDir, filename);
+
+    // Check if file exists
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบรูปภาพ",
+      });
+    }
+
+    // Set appropriate content type
+    const ext = path.extname(filename).toLowerCase();
+    let contentType = "image/jpeg";
+
+    if (ext === ".png") {
+      contentType = "image/png";
+    } else if (ext === ".jpg" || ext === ".jpeg") {
+      contentType = "image/jpeg";
+    }
+
+    res.setHeader("Content-Type", contentType);
+
+    // Stream the file
+    const fileStream = fs.createReadStream(imagePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error("Error fetching image:", error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงรูปภาพ",
+    });
+  }
+});
+
+// Get monthly statistics - for dashboard
+router.get(
+  "/stats/monthly",
+  auth,
+  checkRole(["admin", "equipment_manager"]),
+  async (req, res) => {
+    try {
+      // Get current month and year
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1; // JavaScript months are 0-based
+
+      // Get the last 6 months
+      let months = [];
+      for (let i = 0; i < 6; i++) {
+        let month = currentMonth - i;
+        let year = currentYear;
+
+        if (month <= 0) {
+          month += 12;
+          year -= 1;
+        }
+
+        months.push({ month, year });
+      }
+
+      // Build the SQL query
+      const query = `
+      SELECT 
+        YEAR(created_at) as year,
+        MONTH(created_at) as month,
+        COUNT(*) as total,
+        SUM(CASE WHEN status_id = 3 THEN 1 ELSE 0 END) as resolved,
+        SUM(CASE WHEN status_id = 4 THEN 1 ELSE 0 END) as unfixable,
+        SUM(CASE WHEN problem_type = 'hardware' THEN 1 ELSE 0 END) as hardware,
+        SUM(CASE WHEN problem_type = 'software' THEN 1 ELSE 0 END) as software,
+        SUM(CASE WHEN problem_type = 'other' THEN 1 ELSE 0 END) as other
+      FROM problems
+      WHERE 
+        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
+        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
+        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
+        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
+        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
+        (YEAR(created_at) = ? AND MONTH(created_at) = ?)
+      GROUP BY YEAR(created_at), MONTH(created_at)
+      ORDER BY YEAR(created_at) DESC, MONTH(created_at) DESC
+    `;
+
+      // Prepare the parameters
+      const params = months.flatMap((m) => [m.year, m.month]);
+
+      // Execute the query
+      const [results] = await db.execute(query, params);
+
+      // Transform results to include all months (even empty ones)
+      const stats = months.map((m) => {
+        const found = results.find(
+          (r) => r.year === m.year && r.month === m.month
+        );
+
+        if (found) {
+          return found;
+        }
+
+        return {
+          year: m.year,
+          month: m.month,
+          total: 0,
+          resolved: 0,
+          unfixable: 0,
+          hardware: 0,
+          software: 0,
+          other: 0,
+        };
+      });
+
+      res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (error) {
+      console.error("Error fetching statistics:", error);
+      res.status(500).json({
+        success: false,
+        message: "เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// Get current month statistics by room
+router.get(
+  "/stats/rooms",
+  auth,
+  checkRole(["admin", "equipment_manager"]),
+  async (req, res) => {
+    try {
+      const query = `
+      SELECT 
+        e.room,
+        COUNT(*) as total,
+        SUM(CASE WHEN p.problem_type = 'hardware' THEN 1 ELSE 0 END) as hardware,
+        SUM(CASE WHEN p.problem_type = 'software' THEN 1 ELSE 0 END) as software,
+        SUM(CASE WHEN p.problem_type = 'other' THEN 1 ELSE 0 END) as other
+      FROM problems p
+      JOIN equipment e ON p.equipment_id = e.equipment_id
+      WHERE p.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+      GROUP BY e.room
+      ORDER BY total DESC
+      LIMIT 10
+    `;
+
+      const [results] = await db.execute(query);
+
+      res.json({
+        success: true,
+        data: results,
+      });
+    } catch (error) {
+      console.error("Error fetching room statistics:", error);
+      res.status(500).json({
+        success: false,
+        message: "เกิดข้อผิดพลาดในการดึงข้อมูลสถิติตามห้อง",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// Get status summary counts
+router.get("/stats/summary", auth, async (req, res) => {
+  try {
+    let query;
+    let params = [];
+
+    // Different query based on role
+    if (req.user.role === "reporter") {
+      // For reporters, only show their own problems
+      query = `
+        SELECT 
+          s.id as status_id,
+          s.name as status_name,
+          s.color as status_color,
+          COUNT(p.id) as count
+        FROM status s
+        LEFT JOIN problems p ON s.id = p.status_id AND p.reported_by = ?
+        GROUP BY s.id, s.name, s.color
+        ORDER BY s.id
+      `;
+      params = [req.user.id];
+    } else if (req.user.role === "equipment_assistant") {
+      // For assistants, show problems they're assigned to or pending
+      query = `
+        SELECT 
+          s.id as status_id,
+          s.name as status_name,
+          s.color as status_color,
+          COUNT(CASE WHEN p.status_id = s.id AND 
+            (p.status_id = 1 OR p.assigned_to = ? OR p.reported_by = ?) 
+            THEN p.id END) as count
+        FROM status s
+        LEFT JOIN problems p ON s.id = p.status_id
+        GROUP BY s.id, s.name, s.color
+        ORDER BY s.id
+      `;
+      params = [req.user.id, req.user.id];
+    } else {
+      // For admins and managers, show all problems
+      query = `
+        SELECT 
+          s.id as status_id,
+          s.name as status_name,
+          s.color as status_color,
+          COUNT(p.id) as count
+        FROM status s
+        LEFT JOIN problems p ON s.id = p.status_id
+        GROUP BY s.id, s.name, s.color
+        ORDER BY s.id
+      `;
+    }
+
+    const [results] = await db.execute(query, params);
+
+    // Add total count
+    const totalCount = results.reduce(
+      (sum, item) => sum + Number(item.count),
+      0
+    );
+
+    res.json({
+      success: true,
+      data: {
+        statuses: results,
+        total: totalCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching status summary:", error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงข้อมูลสรุป",
       error: error.message,
     });
   }
