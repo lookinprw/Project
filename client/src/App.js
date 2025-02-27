@@ -17,6 +17,7 @@ import UnfixablePage from "./pages/UnfixablePage";
 import StatusPage from "./pages/StatusPage";
 import ComputerCenterPage from "./pages/ComputerCenterPage";
 import ProblemAnalyticsPage from "./pages/ProblemAnalyticsPage";
+import AssignmentHistoryPage from "./pages/AssignmentHistoryPage";
 
 function App() {
   // Add environment check on app startup
@@ -46,6 +47,16 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route
+              path="/assignment-history"
+              element={
+                <ProtectedRoute requiredRole={["equipment_assistant"]}>
+                  <AssignmentHistoryPage />
+                </ProtectedRoute>
+              }
+            />
+
             <Route
               path="/problem-analytics"
               element={

@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Menu,
   BarChart2,
+  Clock,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -22,6 +23,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const role = user?.role;
   const isAdmin = role === "admin";
   const isEquipManager = role === "equipment_manager";
+  const isEquipAssistant = role === "equipment_assistant";
 
   const isActivePath = (path) => location.pathname === path;
 
@@ -85,6 +87,14 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       icon: <BarChart2 size={20} />,
       text: "รายงานการวิเคราะห์ปัญหา",
       show: isEquipManager,
+    },
+
+    // Assignment History for Equipment Assistants
+    {
+      path: "/assignment-history",
+      icon: <Clock size={20} />,
+      text: "ประวัติการซ่อมบำรุง",
+      show: isEquipAssistant,
     },
   ];
 

@@ -1212,4 +1212,151 @@ router.get("/stats/summary", auth, async (req, res) => {
   }
 });
 
+// In your problems routes file
+
+// Get history of completed assignments for a specific user
+router.get("/history", auth, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      startDate,
+      endDate,
+      assignedTo,
+      status = [],
+    } = req.query;
+
+    // Default to completed statuses if none provided
+    const statusIds = Array.isArray(status) ? status : [status].filter(Boolean);
+    const completedStatusIds = statusIds.length > 0 ? statusIds : [3, 4, 8]; // Adjust based on your status IDs
+
+    // Ensure the user can only view their own assignments if they're not admin/manager
+    let userFilter = "";
+    let userParams = [];
+
+    if (req.user.role === "equipment_assistant") {
+      // Equipment assistants can only see their own assignments
+      userFilter = "AND p.assigned_to = ?";
+      userParams.push(req.user.id);
+    } else if (assignedTo) {
+      // Admins/managers can filter by assigned_to
+      userFilter = "AND p.assigned_to = ?";
+      userParams.push(assignedTo);
+    }
+
+    // Build date range conditions
+    let dateRangeFilter = "";
+    let dateParams = [];
+
+    if (startDate) {
+      dateRangeFilter += " AND DATE(p.updated_at) >= ?";
+      dateParams.push(startDate);
+    }
+
+    if (endDate) {
+      dateRangeFilter += " AND DATE(p.updated_at) <= ?";
+      dateParams.push(endDate);
+    }
+
+    // Build search condition
+    let searchFilter = "";
+    let searchParams = [];
+
+    if (search) {
+      searchFilter = `
+        AND (
+          e.equipment_id LIKE ? OR 
+          e.name LIKE ? OR 
+          p.description LIKE ? OR
+          CONCAT(u.firstname, ' ', u.lastname) LIKE ?
+        )
+      `;
+      searchParams = Array(4).fill(`%${search}%`);
+    }
+
+    // Calculate pagination
+    const offset = (page - 1) * limit;
+
+    // Build the query
+    const query = `
+      SELECT 
+        p.*,
+        e.name as equipment_name,
+        e.equipment_id,
+        e.room as equipment_room,
+        s.name as status_name,
+        s.color as status_color,
+        CONCAT(u.firstname, ' ', u.lastname) as reporter_name,
+        CONCAT(a.firstname, ' ', a.lastname) as assigned_to_name
+      FROM 
+        problems p
+      LEFT JOIN 
+        equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN 
+        users u ON p.reported_by = u.id
+      LEFT JOIN 
+        users a ON p.assigned_to = a.id
+      LEFT JOIN 
+        status s ON p.status_id = s.id
+      WHERE 
+        p.status_id IN (${completedStatusIds.join(",")})
+        ${userFilter}
+        ${dateRangeFilter}
+        ${searchFilter}
+      ORDER BY 
+        p.updated_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    // Execute the query
+    const [results] = await db.execute(query, [
+      ...userParams,
+      ...dateParams,
+      ...searchParams,
+      parseInt(limit),
+      offset,
+    ]);
+
+    // Count total items for pagination
+    const countQuery = `
+      SELECT 
+        COUNT(*) as total
+      FROM 
+        problems p
+      LEFT JOIN 
+        equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN 
+        users u ON p.reported_by = u.id
+      WHERE 
+        p.status_id IN (${completedStatusIds.join(",")})
+        ${userFilter}
+        ${dateRangeFilter}
+        ${searchFilter}
+    `;
+
+    const [countResult] = await db.execute(countQuery, [
+      ...userParams,
+      ...dateParams,
+      ...searchParams,
+    ]);
+
+    const totalItems = countResult[0].total;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    res.json({
+      success: true,
+      data: results,
+      page: parseInt(page),
+      totalItems,
+      totalPages,
+    });
+  } catch (error) {
+    console.error("Error fetching assignment history:", error);
+    res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงข้อมูลประวัติการซ่อม",
+    });
+  }
+});
 module.exports = router;

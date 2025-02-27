@@ -17,6 +17,8 @@ import {
   Trash2,
 } from "lucide-react";
 import api from "../utils/axios";
+import { StatusSelect } from "../components/problems/StatusSelect";
+import { StatusBadge } from "../components/common/StatusBadge";
 
 function DashboardPage() {
   const { user: currentUser } = useAuth();
