@@ -17,7 +17,7 @@ import { StatusBadge } from "../components/common/StatusBadge";
 
 function AssignmentHistoryPage() {
   const { user: currentUser } = useAuth();
-  const { showError } = useAlert();
+  const { showSuccess, showError } = useAlert();
   const navigate = useNavigate();
 
   // Data state
@@ -33,8 +33,8 @@ function AssignmentHistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dateRange, setDateRange] = useState({
-    startDate: null,
-    endDate: null,
+    startDate: "",
+    endDate: "",
   });
   const [selectedStatusIds, setSelectedStatusIds] = useState([]);
   const [statuses, setStatuses] = useState([]);
@@ -55,7 +55,6 @@ function AssignmentHistoryPage() {
       const response = await api.get("/status");
       if (response.data.success) {
         // Only include "completed" statuses (e.g., Resolved, Closed, etc.)
-        // You may need to adjust the IDs based on your status definitions
         const completedStatusIds = [3, 4, 8]; // Example: 3=Completed, 4=Cannot Fix, 8=Damaged
         const filteredStatuses = response.data.data.filter((status) =>
           completedStatusIds.includes(status.id)
@@ -80,6 +79,7 @@ function AssignmentHistoryPage() {
       const params = new URLSearchParams();
       params.append("page", currentPage);
       params.append("limit", pageSize);
+      params.append("assignedTo", currentUser.id); // Always filter by current user
 
       if (debouncedSearch) {
         params.append("search", debouncedSearch);
@@ -93,22 +93,21 @@ function AssignmentHistoryPage() {
         params.append("endDate", dateRange.endDate);
       }
 
+      // Add selected statuses if any are selected
       if (selectedStatusIds.length > 0) {
         selectedStatusIds.forEach((id) => params.append("status", id));
-      } else {
-        // Default to all completed statuses if none selected
-        const completedStatusIds = [3, 4, 8]; // Same as above
-        completedStatusIds.forEach((id) => params.append("status", id));
       }
 
-      // Add the user ID to only get their assignments
-      params.append("assignedTo", currentUser.id);
+      console.log("Fetching assignments with params:", params.toString());
 
       const response = await api.get(`/problems/history?${params.toString()}`);
 
       if (response.data.success) {
         setCompletedAssignments(response.data.data || []);
         setTotalPages(response.data.totalPages || 1);
+      } else {
+        console.error("API returned failure:", response.data);
+        showError("ไม่สามารถดึงข้อมูลประวัติการซ่อมได้");
       }
     } catch (error) {
       console.error("Error fetching completed assignments:", error);
@@ -132,15 +131,14 @@ function AssignmentHistoryPage() {
     }
 
     fetchStatuses();
-    fetchCompletedAssignments();
-  }, [
-    currentUser,
-    navigate,
-    currentPage,
-    debouncedSearch,
-    dateRange,
-    selectedStatusIds,
-  ]);
+  }, [currentUser, navigate]);
+
+  // Fetch data when filters change
+  useEffect(() => {
+    if (currentUser?.role === "equipment_assistant") {
+      fetchCompletedAssignments();
+    }
+  }, [currentPage, debouncedSearch, dateRange, selectedStatusIds]);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -172,16 +170,21 @@ function AssignmentHistoryPage() {
   const calculateWorkDuration = (assignedDate, completedDate) => {
     if (!assignedDate || !completedDate) return "N/A";
 
-    const assigned = new Date(assignedDate);
-    const completed = new Date(completedDate);
+    try {
+      const assigned = new Date(assignedDate);
+      const completed = new Date(completedDate);
 
-    // Calculate difference in milliseconds
-    const diff = completed - assigned;
+      // Calculate difference in milliseconds
+      const diff = completed - assigned;
 
-    // Convert to hours (rounded to 1 decimal place)
-    const hours = Math.round((diff / (1000 * 60 * 60)) * 10) / 10;
+      // Convert to hours (rounded to 1 decimal place)
+      const hours = Math.round((diff / (1000 * 60 * 60)) * 10) / 10;
 
-    return `${hours} ชั่วโมง`;
+      return `${hours} ชั่วโมง`;
+    } catch (error) {
+      console.error("Error calculating duration:", error);
+      return "N/A";
+    }
   };
 
   // Format the resolution method based on status and comments
