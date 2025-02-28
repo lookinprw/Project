@@ -17,8 +17,6 @@ import {
   Trash2,
 } from "lucide-react";
 import api from "../utils/axios";
-import { StatusSelect } from "../components/problems/StatusSelect";
-import { StatusBadge } from "../components/common/StatusBadge";
 
 function DashboardPage() {
   const { user: currentUser } = useAuth();
@@ -530,7 +528,6 @@ function DashboardPage() {
                       {[
                         { value: "hardware", label: "ฮาร์ดแวร์" },
                         { value: "software", label: "ซอฟต์แวร์" },
-                        { value: "other", label: "อื่นๆ" },
                       ].map((type) => (
                         <label
                           key={type.value}

@@ -25,9 +25,15 @@ import {
   Monitor,
   HelpCircle,
   User,
+  CheckSquare,
+  Square,
+  RefreshCw,
+  X,
+  BarChart2,
+  ChevronDown,
+  Clock,
 } from "lucide-react";
 import Pagination from "../components/common/Pagination";
-import { CheckSquare, Square } from "lucide-react";
 
 function ProblemAnalysisPage() {
   const { user } = useAuth();
@@ -47,29 +53,28 @@ function ProblemAnalysisPage() {
   const [pageSize] = useState(10);
 
   // Filter states
-  const [selectedRoom, setSelectedRoom] = useState("all");
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [selectedProblemTypes, setSelectedProblemTypes] = useState([]);
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
   const [dateRange, setDateRange] = useState({
     startDate: "",
     endDate: "",
   });
-  const [selectedProblemType, setSelectedProblemType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Add these state variables to your component
-  const [selectedRooms, setSelectedRooms] = useState([]);
-  const [selectedProblemTypes, setSelectedProblemTypes] = useState([]);
-  const [selectedStatuses, setSelectedStatuses] = useState([]);
+  // UI state
+  const [showFilters, setShowFilters] = useState(false);
 
   // Colors for charts
   const COLORS = [
-    "#0088FE", // blue
-    "#00C49F", // teal
-    "#FFBB28", // yellow
-    "#FF8042", // orange
-    "#8884D8", // purple
-    "#82ca9d", // green
+    "#4F46E5", // indigo-600
+    "#10B981", // emerald-500
+    "#F59E0B", // amber-500
+    "#EF4444", // red-500
+    "#8B5CF6", // violet-500
+    "#EC4899", // pink-500
   ];
 
   const monthNames = [
@@ -136,6 +141,7 @@ function ProblemAnalysisPage() {
     return params;
   };
 
+  // Toggle handlers
   const handleRoomToggle = (room) => {
     setSelectedRooms((prev) =>
       prev.includes(room) ? prev.filter((r) => r !== room) : [...prev, room]
@@ -163,8 +169,6 @@ function ProblemAnalysisPage() {
     setLoading(true);
     try {
       const params = buildQueryParams();
-
-      console.log("Fetching data with params:", params.toString());
 
       // Fetch data in parallel with filters applied
       const [
@@ -235,14 +239,6 @@ function ProblemAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, debouncedSearch]);
 
-  const handleRoomChange = (e) => {
-    setSelectedRoom(e.target.value);
-  };
-
-  const handleProblemTypeChange = (e) => {
-    setSelectedProblemType(e.target.value);
-  };
-
   const handleDateChange = (e, field) => {
     setDateRange((prev) => ({
       ...prev,
@@ -258,6 +254,11 @@ function ProblemAnalysisPage() {
     // Reset to first page when applying filters
     setCurrentPage(1);
     fetchData();
+
+    // Hide filters panel on mobile after applying
+    if (window.innerWidth < 768) {
+      setShowFilters(false);
+    }
   };
 
   const handleResetFilters = () => {
@@ -316,6 +317,9 @@ function ProblemAnalysisPage() {
       <DashboardLayout>
         <div className="min-h-screen flex items-center justify-center bg-gray-50/50 p-6">
           <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+              <X className="h-8 w-8 text-red-600" />
+            </div>
             <h2 className="text-2xl font-bold text-red-600">
               ไม่มีสิทธิ์เข้าถึง
             </h2>
@@ -331,7 +335,7 @@ function ProblemAnalysisPage() {
   if (loading && monthlyStats.length === 0) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
           <div className="text-center">
             <div className="inline-block animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full" />
             <p className="mt-4 text-lg text-gray-600">กำลังโหลดข้อมูล...</p>
@@ -372,278 +376,347 @@ function ProblemAnalysisPage() {
     {
       name: "เสร็จสิ้น",
       value: parseInt(resolvedStatus.count) || 0,
-      color: "#00C49F",
+      color: "#10B981", // emerald-500
     },
     {
       name: "ชำรุดเสียหาย",
       value: parseInt(damagedStatus.count) || 0,
-      color: "#FF8042",
+      color: "#F59E0B", // amber-500
     },
-    { name: "อยู่ระหว่างดำเนินการ", value: inProgressCount, color: "#8884D8" },
+    {
+      name: "อยู่ระหว่างดำเนินการ",
+      value: inProgressCount,
+      color: "#6366F1", // indigo-500
+    },
   ].filter((item) => item.value > 0); // Filter out zero values
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-gray-50/50 p-6">
+      <div className="min-h-screen bg-gray-50 p-4 md:p-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">
-            การวิเคราะห์ข้อมูลปัญหา
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            วิเคราะห์ข้อมูลสถิติของปัญหาครุภัณฑ์คอมพิวเตอร์ทั้งหมด
-          </p>
+        <div className="mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                การวิเคราะห์ข้อมูลปัญหา
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                วิเคราะห์ข้อมูลสถิติของปัญหาครุภัณฑ์คอมพิวเตอร์ทั้งหมด
+              </p>
+            </div>
+            <div className="mt-4 md:mt-0 flex space-x-2">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                ตัวกรอง
+                <ChevronDown
+                  className={`ml-2 h-4 w-4 transition-transform ${
+                    showFilters ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              <button
+                onClick={fetchData}
+                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                รีเฟรช
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Filter Controls */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Filter className="w-5 h-5 text-gray-500" />
-            <h3 className="text-lg font-medium">ตัวกรอง</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-            {/* Room filter with checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ห้อง
-              </label>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {availableRooms.map((room) => (
-                  <label
-                    key={room}
-                    className="flex items-center space-x-2 cursor-pointer"
-                  >
-                    <div
-                      onClick={() => handleRoomToggle(room)}
-                      className="flex-shrink-0"
-                    >
-                      {selectedRooms.includes(room) ? (
-                        <CheckSquare className="h-5 w-5 text-indigo-600" />
-                      ) : (
-                        <Square className="h-5 w-5 text-gray-400" />
-                      )}
-                    </div>
-                    <span className="text-sm text-gray-700">{room}</span>
-                  </label>
-                ))}
-                {availableRooms.length === 0 && (
-                  <p className="text-sm text-gray-500">ไม่พบข้อมูลห้อง</p>
-                )}
+        {showFilters && (
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border border-gray-100 mb-6 transition-all duration-200 ease-in-out">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-500" />
+                <h3 className="text-lg font-medium">ตัวกรอง</h3>
               </div>
+              <button
+                onClick={() => setShowFilters(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Problem type filter with checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ประเภทปัญหา
-              </label>
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <div
-                    onClick={() => handleProblemTypeToggle("hardware")}
-                    className="flex-shrink-0"
-                  >
-                    {selectedProblemTypes.includes("hardware") ? (
-                      <CheckSquare className="h-5 w-5 text-indigo-600" />
-                    ) : (
-                      <Square className="h-5 w-5 text-gray-400" />
-                    )}
-                  </div>
-                  <span className="text-sm text-gray-700">ฮาร์ดแวร์</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+              {/* Room filter with checkboxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ห้อง
                 </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <div
-                    onClick={() => handleProblemTypeToggle("software")}
-                    className="flex-shrink-0"
-                  >
-                    {selectedProblemTypes.includes("software") ? (
-                      <CheckSquare className="h-5 w-5 text-indigo-600" />
-                    ) : (
-                      <Square className="h-5 w-5 text-gray-400" />
-                    )}
-                  </div>
-                  <span className="text-sm text-gray-700">ซอฟต์แวร์</span>
-                </label>
+                <div className="space-y-2 max-h-40 overflow-y-auto bg-gray-50 p-3 rounded-md">
+                  {availableRooms.length > 0 ? (
+                    availableRooms.map((room) => (
+                      <label
+                        key={room}
+                        className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded"
+                      >
+                        <div
+                          onClick={() => handleRoomToggle(room)}
+                          className="flex-shrink-0"
+                        >
+                          {selectedRooms.includes(room) ? (
+                            <CheckSquare className="h-5 w-5 text-indigo-600" />
+                          ) : (
+                            <Square className="h-5 w-5 text-gray-400" />
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-700">{room}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 p-2">ไม่พบข้อมูลห้อง</p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Status filter with checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                สถานะ
-              </label>
-              <div className="space-y-2">
-                {summary.statuses.map((status) => (
-                  <label
-                    key={status.status_id}
-                    className="flex items-center space-x-2 cursor-pointer"
-                  >
+              {/* Problem type filter with checkboxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ประเภทปัญหา
+                </label>
+                <div className="space-y-2 bg-gray-50 p-3 rounded-md">
+                  <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
                     <div
-                      onClick={() =>
-                        handleStatusToggle(status.status_id.toString())
-                      }
+                      onClick={() => handleProblemTypeToggle("hardware")}
                       className="flex-shrink-0"
                     >
-                      {selectedStatuses.includes(
-                        status.status_id.toString()
-                      ) ? (
+                      {selectedProblemTypes.includes("hardware") ? (
                         <CheckSquare className="h-5 w-5 text-indigo-600" />
                       ) : (
                         <Square className="h-5 w-5 text-gray-400" />
                       )}
                     </div>
                     <div className="flex items-center">
-                      <span
-                        className="w-3 h-3 rounded-full mr-2"
-                        style={{ backgroundColor: status.color || "#888" }}
-                      ></span>
-                      <span className="text-sm text-gray-700">
-                        {status.status_name}
-                      </span>
+                      <HardDrive className="w-4 h-4 mr-2 text-red-600" />
+                      <span className="text-sm text-gray-700">ฮาร์ดแวร์</span>
                     </div>
                   </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Date range filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ช่วงวันที่
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="date"
-                    className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    value={dateRange.startDate}
-                    onChange={(e) => handleDateChange(e, "startDate")}
-                  />
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="date"
-                    className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    value={dateRange.endDate}
-                    onChange={(e) => handleDateChange(e, "endDate")}
-                  />
+                  <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                    <div
+                      onClick={() => handleProblemTypeToggle("software")}
+                      className="flex-shrink-0"
+                    >
+                      {selectedProblemTypes.includes("software") ? (
+                        <CheckSquare className="h-5 w-5 text-indigo-600" />
+                      ) : (
+                        <Square className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex items-center">
+                      <Monitor className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="text-sm text-gray-700">ซอฟต์แวร์</span>
+                    </div>
+                  </label>
                 </div>
               </div>
+
+              {/* Status filter with checkboxes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  สถานะ
+                </label>
+                <div className="space-y-2 bg-gray-50 p-3 rounded-md max-h-40 overflow-y-auto">
+                  {summary.statuses.map((status) => (
+                    <label
+                      key={status.status_id}
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded"
+                    >
+                      <div
+                        onClick={() =>
+                          handleStatusToggle(status.status_id.toString())
+                        }
+                        className="flex-shrink-0"
+                      >
+                        {selectedStatuses.includes(
+                          status.status_id.toString()
+                        ) ? (
+                          <CheckSquare className="h-5 w-5 text-indigo-600" />
+                        ) : (
+                          <Square className="h-5 w-5 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex items-center">
+                        <span
+                          className="w-3 h-3 rounded-full mr-2"
+                          style={{ backgroundColor: status.color || "#888" }}
+                        ></span>
+                        <span className="text-sm text-gray-700">
+                          {status.status_name}
+                        </span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* Search filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* Date range filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ช่วงวันที่
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="date"
+                      className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      value={dateRange.startDate}
+                      onChange={(e) => handleDateChange(e, "startDate")}
+                    />
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="date"
+                      className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      value={dateRange.endDate}
+                      onChange={(e) => handleDateChange(e, "endDate")}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Search filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ค้นหา
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    placeholder="ค้นหาด้วยรหัสครุภัณฑ์, ปัญหา..."
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter action buttons */}
+            <div className="flex justify-end space-x-3 mt-4">
+              <button
+                onClick={handleResetFilters}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                รีเซ็ต
+              </button>
+              <button
+                onClick={handleApplyFilters}
+                className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700"
+              >
                 ค้นหา
-              </label>
-              <div className="relative rounded-md shadow-sm">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  placeholder="ค้นหาด้วยรหัสครุภัณฑ์, ปัญหา..."
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-              </div>
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Filter action buttons */}
-          <div className="flex justify-end space-x-3 mt-4">
-            <button
-              onClick={handleResetFilters}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              รีเซ็ต
-            </button>
-            <button
-              onClick={handleApplyFilters}
-              className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              ค้นหา
-            </button>
-          </div>
-        </div>
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+          <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 border border-gray-100 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
               ปัญหาทั้งหมด
             </h3>
-            <p className="text-3xl font-bold text-indigo-600">
-              {summary.total || 0}
-            </p>
+            <div className="flex items-center">
+              <p className="text-3xl font-bold text-gray-900">
+                {summary.total || 0}
+              </p>
+              <div className="flex items-center justify-center w-12 h-12 ml-auto bg-indigo-100 rounded-full">
+                <BarChart2 className="w-6 h-6 text-indigo-600" />
+              </div>
+            </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 border border-gray-100 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
               เสร็จสิ้น
             </h3>
             <div className="flex items-center">
-              <p className="text-3xl font-bold text-green-600">
-                {resolvedStatus.count || 0}
-              </p>
-              <span className="text-sm text-gray-500 ml-2">
-                {summary.total > 0
-                  ? `(${Math.round(
-                      (resolvedStatus.count / summary.total) * 100
-                    )}%)`
-                  : "(0%)"}
-              </span>
+              <div>
+                <p className="text-3xl font-bold text-gray-900">
+                  {resolvedStatus.count || 0}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {summary.total > 0
+                    ? `(${Math.round(
+                        (resolvedStatus.count / summary.total) * 100
+                      )}%)`
+                    : "(0%)"}
+                </p>
+              </div>
+              <div className="flex items-center justify-center w-12 h-12 ml-auto bg-green-100 rounded-full">
+                <CheckSquare className="w-6 h-6 text-green-600" />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 border border-gray-100 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
               อยู่ระหว่างดำเนินการ
             </h3>
             <div className="flex items-center">
-              <p className="text-3xl font-bold text-purple-600">
-                {inProgressCount}
-              </p>
-              <span className="text-sm text-gray-500 ml-2">
-                {summary.total > 0
-                  ? `(${Math.round((inProgressCount / summary.total) * 100)}%)`
-                  : "(0%)"}
-              </span>
+              <div>
+                <p className="text-3xl font-bold text-gray-900">
+                  {inProgressCount}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {summary.total > 0
+                    ? `(${Math.round(
+                        (inProgressCount / summary.total) * 100
+                      )}%)`
+                    : "(0%)"}
+                </p>
+              </div>
+              <div className="flex items-center justify-center w-12 h-12 ml-auto bg-indigo-100 rounded-full">
+                <Clock className="w-6 h-6 text-indigo-600" />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 border border-gray-100 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
               ชำรุดเสียหาย
             </h3>
             <div className="flex items-center">
-              <p className="text-3xl font-bold text-orange-600">
-                {damagedStatus.count || 0}
-              </p>
-              <span className="text-sm text-gray-500 ml-2">
-                {summary.total > 0
-                  ? `(${Math.round(
-                      (damagedStatus.count / summary.total) * 100
-                    )}%)`
-                  : "(0%)"}
-              </span>
+              <div>
+                <p className="text-3xl font-bold text-gray-900">
+                  {damagedStatus.count || 0}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {summary.total > 0
+                    ? `(${Math.round(
+                        (damagedStatus.count / summary.total) * 100
+                      )}%)`
+                    : "(0%)"}
+                </p>
+              </div>
+              <div className="flex items-center justify-center w-12 h-12 ml-auto bg-amber-100 rounded-full">
+                <X className="w-6 h-6 text-amber-600" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Main Analysis Graphs - Just 2 key graphs */}
+        {/* Main Analysis Graphs */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Graph 1: Monthly Trends by Problem Type */}
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          {/* Monthly Trends Chart */}
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               แนวโน้มปัญหารายเดือน
             </h3>
@@ -665,22 +738,24 @@ function ProblemAnalysisPage() {
                     data={monthlyStats}
                     margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="name" fontSize={12} />
+                    <YAxis fontSize={12} />
                     <Tooltip />
                     <Legend />
                     <Bar
                       dataKey="hardware"
                       name="ฮาร์ดแวร์"
-                      fill="#0088FE"
+                      fill={COLORS[0]}
                       stackId="a"
+                      radius={[4, 4, 0, 0]}
                     />
                     <Bar
                       dataKey="software"
                       name="ซอฟต์แวร์"
-                      fill="#00C49F"
+                      fill={COLORS[1]}
                       stackId="a"
+                      radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -688,45 +763,73 @@ function ProblemAnalysisPage() {
             )}
 
             {/* Problem type summary statistics */}
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
-                <div className="flex items-center justify-center mb-1">
-                  <HardDrive className="w-4 h-4 text-blue-600 mr-1" />
-                  <span className="text-sm font-medium text-blue-800">
-                    ฮาร์ดแวร์
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <HardDrive className="w-5 h-5 text-indigo-600 mr-2" />
+                    <span className="text-sm font-medium text-indigo-800">
+                      ฮาร์ดแวร์
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full">
+                    {totalProblems > 0
+                      ? `${Math.round((totalHardware / totalProblems) * 100)}%`
+                      : "0%"}
                   </span>
                 </div>
-                <p className="text-xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-indigo-600">
                   {totalHardware}
                 </p>
-                <p className="text-xs text-blue-500">
-                  {totalProblems > 0
-                    ? `${Math.round((totalHardware / totalProblems) * 100)}%`
-                    : "0%"}
-                </p>
+                <div className="w-full bg-indigo-200 rounded-full h-2 mt-2">
+                  <div
+                    className="bg-indigo-600 h-2 rounded-full"
+                    style={{
+                      width: `${
+                        totalProblems > 0
+                          ? Math.round((totalHardware / totalProblems) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  ></div>
+                </div>
               </div>
 
-              <div className="bg-green-50 p-3 rounded-lg text-center">
-                <div className="flex items-center justify-center mb-1">
-                  <Monitor className="w-4 h-4 text-green-600 mr-1" />
-                  <span className="text-sm font-medium text-green-800">
-                    ซอฟต์แวร์
+              <div className="bg-emerald-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <Monitor className="w-5 h-5 text-emerald-600 mr-2" />
+                    <span className="text-sm font-medium text-emerald-800">
+                      ซอฟต์แวร์
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full">
+                    {totalProblems > 0
+                      ? `${Math.round((totalSoftware / totalProblems) * 100)}%`
+                      : "0%"}
                   </span>
                 </div>
-                <p className="text-xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-emerald-600">
                   {totalSoftware}
                 </p>
-                <p className="text-xs text-green-500">
-                  {totalProblems > 0
-                    ? `${Math.round((totalSoftware / totalProblems) * 100)}%`
-                    : "0%"}
-                </p>
+                <div className="w-full bg-emerald-200 rounded-full h-2 mt-2">
+                  <div
+                    className="bg-emerald-600 h-2 rounded-full"
+                    style={{
+                      width: `${
+                        totalProblems > 0
+                          ? Math.round((totalSoftware / totalProblems) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  ></div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Graph 2: Problem Distribution by Room and Status */}
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          {/* Graph 2: Problem Distribution by Status and Room */}
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               การกระจายปัญหาตามสถานะและห้อง
             </h3>
@@ -751,49 +854,58 @@ function ProblemAnalysisPage() {
                       data={statusSummary}
                       cx="50%"
                       cy="50%"
-                      labelLine={true}
-                      outerRadius={80}
+                      labelLine={false}
+                      outerRadius={100}
                       fill="#8884d8"
                       dataKey="value"
                       nameKey="name"
-                      label={({ name, value, percent }) =>
-                        value > 0
-                          ? `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
-                          : ""
+                      label={({ name, percent }) =>
+                        `${name}: ${(percent * 100).toFixed(0)}%`
                       }
                     >
                       {statusSummary.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.color || COLORS[index % COLORS.length]}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                        />
                       ))}
                     </Pie>
-                    <Tooltip />
-                    <Legend />
+                    <Tooltip formatter={(value) => [`${value} รายการ`, ""]} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             )}
 
             {/* Room distribution */}
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
+            <div className="mt-2">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
                 ปัญหาตามห้อง (5 อันดับแรก)
               </h4>
               {roomStats.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {roomStats.slice(0, 5).map((room, index) => (
-                    <div key={index} className="flex items-center">
-                      <span
-                        className="w-3 h-3 rounded-full mr-2"
-                        style={{
-                          backgroundColor: COLORS[index % COLORS.length],
-                        }}
-                      ></span>
-                      <span className="text-sm text-gray-700 mr-2">
-                        {room.room || "ไม่ระบุห้อง"}:
-                      </span>
-                      <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+                    <div key={index} className="group">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center">
+                          <span
+                            className="w-3 h-3 rounded-full mr-2"
+                            style={{
+                              backgroundColor: COLORS[index % COLORS.length],
+                            }}
+                          ></span>
+                          <span className="text-sm font-medium text-gray-700">
+                            {room.room || "ไม่ระบุห้อง"}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          {room.total} รายการ
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 group-hover:h-3 transition-all">
                         <div
-                          className="h-2.5 rounded-full"
+                          className="h-full rounded-full"
                           style={{
                             width: `${Math.round(
                               (room.total / (roomStats[0]?.total || 1)) * 100
@@ -802,15 +914,12 @@ function ProblemAnalysisPage() {
                           }}
                         ></div>
                       </div>
-                      <span className="text-sm text-gray-500 ml-2">
-                        {room.total}
-                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500 py-4">
-                  ไม่พบข้อมูลห้อง
+                <div className="text-center text-gray-500 py-4 bg-gray-50 rounded-lg">
+                  <p>ไม่พบข้อมูลห้อง</p>
                 </div>
               )}
             </div>
@@ -818,48 +927,52 @@ function ProblemAnalysisPage() {
         </div>
 
         {/* Table for "เสร็จสิ้น" and "ชำรุดเสียหาย" Problems */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">
-              รายการปัญหาที่เสร็จสิ้นและชำรุด
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">
-              แสดงรายการปัญหาที่มีสถานะ "เสร็จสิ้น" และ "ชำรุดเสียหาย"
-            </p>
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 mb-8 overflow-hidden">
+          <div className="p-4 md:p-6 border-b border-gray-200">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  รายการปัญหาที่เสร็จสิ้นและชำรุด
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  แสดงรายการปัญหาที่มีสถานะ "เสร็จสิ้น" และ "ชำรุดเสียหาย"
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ลำดับ
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     วันที่
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     อุปกรณ์
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     รหัสครุภัณฑ์
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ห้อง
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ปัญหา
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ประเภทปัญหา
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ผู้แจ้ง
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ผู้รับผิดชอบ
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     สถานะ
                   </th>
                 </tr>
@@ -867,8 +980,8 @@ function ProblemAnalysisPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan="10" className="px-6 py-4 text-center">
-                      <div className="flex justify-center items-center py-4">
+                    <td colSpan="10" className="px-4 py-4 text-center">
+                      <div className="flex justify-center items-center py-8">
                         <div className="inline-block animate-spin w-6 h-6 border-4 border-indigo-500 border-t-transparent rounded-full mr-2" />
                         <span>กำลังโหลดข้อมูล...</span>
                       </div>
@@ -878,22 +991,12 @@ function ProblemAnalysisPage() {
                   <tr>
                     <td
                       colSpan="10"
-                      className="px-6 py-8 text-center text-gray-500"
+                      className="px-4 py-8 text-center text-gray-500"
                     >
                       <div className="flex flex-col items-center justify-center">
-                        <svg
-                          className="w-16 h-16 text-gray-400 mb-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                          <HelpCircle className="w-8 h-8 text-gray-400" />
+                        </div>
                         <p className="font-medium">
                           ไม่พบข้อมูลรายการที่เสร็จสิ้นหรือชำรุด
                         </p>
@@ -912,53 +1015,57 @@ function ProblemAnalysisPage() {
                     return (
                       <tr
                         key={problem.id}
-                        className="hover:bg-gray-50/50 transition-colors duration-150"
+                        className="hover:bg-gray-50 transition-colors duration-150"
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
                           {(currentPage - 1) * pageSize + index + 1}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {new Date(problem.created_at).toLocaleDateString(
                             "th-TH"
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
                           {problem.equipment_name || "N/A"}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           {problem.equipment_id || "N/A"}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {problem.equipment_room || "N/A"}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
                           {problem.description}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div
-                            className={`inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-xs ${typeDetails.bgColor} ${typeDetails.textColor} border ${typeDetails.borderColor}`}
+                            className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs ${typeDetails.bgColor} ${typeDetails.textColor} border ${typeDetails.borderColor}`}
                           >
                             {typeDetails.icon}
                             <span>{typeDetails.label}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center">
-                            <User className="h-4 w-4 text-gray-400 mr-2" />
+                            <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center mr-2">
+                              <User className="h-3 w-3 text-gray-500" />
+                            </div>
                             <span className="text-sm text-gray-900">
                               {problem.reporter_name || "ไม่ระบุ"}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center">
-                            <User className="h-4 w-4 text-gray-400 mr-2" />
+                            <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center mr-2">
+                              <User className="h-3 w-3 text-gray-500" />
+                            </div>
                             <span className="text-sm text-gray-900">
                               {problem.assigned_to_name || "-"}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span
                             className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
                             style={{

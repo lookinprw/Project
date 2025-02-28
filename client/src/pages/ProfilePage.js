@@ -172,7 +172,7 @@ function ProfilePage() {
                       </div>
                     )}
                   </h2>
-                  <p className="text-gray-600">รหัสผู้ใช้: {user?.username}</p>
+                  <p className="text-gray-600">ชื่อผู้ใช้: {user?.username}</p>
                 </div>
               </div>
 

@@ -1,12 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import UserList from "../components/users/UserList";
 import UserCreateForm from "../components/users/UserCreateForm";
 import ForgotPasswordForm from "../components/users/ForgotPasswordForm";
+import { useAuth } from "../context/AuthContext";
 
 function UsersPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Add a refresh trigger
+  const { user: currentUser } = useAuth();
+
+  // Function to trigger a refresh
+  const refreshUserData = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
   return (
     <DashboardLayout>
@@ -35,12 +43,16 @@ function UsersPage() {
           <UserCreateForm
             onSuccess={() => {
               setShowCreateForm(false);
+              refreshUserData(); // Refresh data after adding a user
             }}
           />
         ) : showPasswordForm ? (
           <ForgotPasswordForm />
         ) : (
-          <UserList />
+          <UserList
+            key={refreshTrigger} // Force remount when refreshTrigger changes
+            onStatusChange={refreshUserData} // Pass refresh callback
+          />
         )}
       </div>
     </DashboardLayout>

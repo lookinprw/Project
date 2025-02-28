@@ -303,9 +303,6 @@ function AssignmentHistoryPage() {
                     ผู้แจ้ง
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ระยะเวลาดำเนินการ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     สถานะ
                   </th>
                 </tr>
@@ -341,18 +338,7 @@ function AssignmentHistoryPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {assignment.calculated_duration ||
-                            calculateWorkDuration(
-                              assignment.assigned_at,
-                              assignment.updated_at
-                            )}
-                        </span>
-                      </div>
-                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap">
                       <StatusBadge
                         status={{

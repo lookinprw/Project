@@ -23,7 +23,7 @@ const hashPassword = async (password) => {
 router.get("/", auth, async (req, res) => {
   try {
     let query = `
-      SELECT id, username, firstname, lastname, role, branch 
+      SELECT id, username, firstname, lastname, role, branch, status 
       FROM users
     `;
     const queryParams = [];
@@ -52,7 +52,6 @@ router.get("/", auth, async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
-    console.log("Login attempt for:", username);
 
     // Input validation
     if (!username || !password) {
@@ -64,14 +63,12 @@ router.post("/login", async (req, res) => {
     }
 
     // Find user
-    const [users] = await db.execute(
-      "SELECT * FROM users WHERE username = ?", 
-      [username]
-    );
+    const [users] = await db.execute("SELECT * FROM users WHERE username = ?", [
+      username,
+    ]);
 
     // User not found
     if (users.length === 0) {
-      console.log("User not found:", username);
       return res.status(200).send({
         success: false,
         type: "error",
@@ -80,6 +77,16 @@ router.post("/login", async (req, res) => {
     }
 
     const user = users[0];
+
+    // Check if user account is inactive
+    if (user.status === "inactive") {
+      return res.status(200).send({
+        success: false,
+        type: "error",
+        message: "บัญชีผู้ใช้นี้ถูกระงับการใช้งาน โปรดติดต่อผู้ดูแลระบบ",
+      });
+    }
+
     let passwordMatch = false;
 
     // Password verification
@@ -96,7 +103,6 @@ router.post("/login", async (req, res) => {
 
     // Wrong password
     if (!passwordMatch) {
-      console.log("Invalid password for user:", username);
       return res.status(200).send({
         success: false,
         type: "error",
@@ -122,9 +128,9 @@ router.post("/login", async (req, res) => {
         lastname: user.lastname,
         role: user.role,
         branch: user.branch,
+        status: user.status,
       },
     });
-
   } catch (error) {
     console.error("Login error:", error);
     return res.status(200).send({
@@ -372,6 +378,167 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
+// Add this endpoint to your user.routes.js file
+
+// Update user status (active/inactive)
+// First, let's fix the status change endpoint in user.routes.js
+
+router.patch("/:id/status", auth, async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    console.log(`Attempting to update user ID ${id} status to: "${status}"`);
+
+    // Validate status
+    if (status !== "active" && status !== "inactive") {
+      console.log(`Invalid status value: "${status}"`);
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `สถานะไม่ถูกต้อง (must be 'active' or 'inactive', received '${status}')`,
+      });
+    }
+
+    // Prevent self-status change
+    if (parseInt(id) === req.user.id) {
+      console.log(`User ${req.user.id} attempted to change their own status`);
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "ไม่สามารถเปลี่ยนสถานะของตัวเองได้",
+      });
+    }
+
+    // Check if user exists and get their role
+    const [targetUser] = await connection.execute(
+      "SELECT id, username, role, status FROM users WHERE id = ?",
+      [id]
+    );
+
+    console.log(`Found user:`, targetUser[0] || "No user found");
+
+    if (targetUser.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบผู้ใช้งานนี้ในระบบ",
+      });
+    }
+
+    // Check permissions based on role
+    if (
+      req.user.role === "equipment_manager" &&
+      (targetUser[0].role === "admin" ||
+        targetUser[0].role === "equipment_manager")
+    ) {
+      console.log(
+        `Permission denied for ${req.user.role} to modify ${targetUser[0].role}`
+      );
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "ไม่มีสิทธิ์ในการเปลี่ยนสถานะผู้ใช้นี้",
+      });
+    }
+
+    // Only admin and equipment_manager can change user status
+    if (!["admin", "equipment_manager"].includes(req.user.role)) {
+      console.log(`User role ${req.user.role} not authorized to change status`);
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "ไม่มีสิทธิ์ในการเปลี่ยนสถานะผู้ใช้งาน",
+      });
+    }
+
+    // First check current status
+    console.log(
+      `Current status in DB for user ${id}: "${targetUser[0].status}"`
+    );
+
+    // Skip update if status is already set to the requested value
+    if (targetUser[0].status === status) {
+      console.log(
+        `User ${id} already has status "${status}" - skipping update`
+      );
+      await connection.commit();
+      return res.json({
+        success: true,
+        message: `สถานะผู้ใช้เป็น ${
+          status === "active" ? "กำลังใช้งาน" : "ยุติการใช้งาน"
+        } อยู่แล้ว`,
+        user: {
+          id: targetUser[0].id,
+          username: targetUser[0].username,
+          status: status,
+        },
+      });
+    }
+
+    // Update user status - execute directly to see the error if any
+    try {
+      // Use a more explicit SQL query
+      const query =
+        "UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?";
+      const params = [status, id];
+
+      console.log(`Executing SQL: ${query} with params:`, params);
+
+      const [updateResult] = await connection.execute(query, params);
+
+      console.log(`Update result:`, updateResult);
+
+      if (updateResult.affectedRows === 0) {
+        throw new Error(`No rows updated for user ID ${id}`);
+      }
+    } catch (sqlError) {
+      console.error(`SQL Error:`, sqlError);
+      throw new Error(`Database error: ${sqlError.message}`);
+    }
+
+    // Verify the update happened
+    const [verifyUpdate] = await connection.execute(
+      "SELECT id, username, status FROM users WHERE id = ?",
+      [id]
+    );
+
+    console.log(`Verification after update:`, verifyUpdate[0]);
+
+    if (verifyUpdate.length === 0 || verifyUpdate[0].status !== status) {
+      throw new Error(`Update verification failed for user ID ${id}`);
+    }
+
+    await connection.commit();
+    console.log(`Successfully updated user ${id} status to "${status}"`);
+
+    res.json({
+      success: true,
+      message: `เปลี่ยนสถานะผู้ใช้เป็น ${
+        status === "active" ? "กำลังใช้งาน" : "ยุติการใช้งาน"
+      } สำเร็จ`,
+      user: {
+        id: targetUser[0].id,
+        username: targetUser[0].username,
+        status: status,
+      },
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error updating user status:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "เกิดข้อผิดพลาดในการเปลี่ยนสถานะผู้ใช้งาน",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 router.get("/me", auth, async (req, res) => {
   try {
     const [users] = await db.execute(
@@ -383,12 +550,12 @@ router.get("/me", auth, async (req, res) => {
     if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "ไม่พบข้อมูลผู้ใช้"
+        message: "ไม่พบข้อมูลผู้ใช้",
       });
     }
 
     const user = users[0];
-    
+
     // Generate fresh tokens
     const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken(user);
@@ -397,13 +564,13 @@ router.get("/me", auth, async (req, res) => {
       success: true,
       user,
       token: newAccessToken,
-      refreshToken: newRefreshToken
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     console.error("Error fetching current user:", error);
     res.status(500).json({
       success: false,
-      message: "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"
+      message: "ไม่สามารถดึงข้อมูลผู้ใช้งานได้",
     });
   }
 });
@@ -462,8 +629,8 @@ router.post("/refresh-token", async (req, res) => {
         firstname: user.firstname,
         lastname: user.lastname,
         role: user.role,
-        branch: user.branch
-      }
+        branch: user.branch,
+      },
     });
   } catch (error) {
     console.error("Refresh token error:", error);
