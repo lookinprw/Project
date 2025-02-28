@@ -27,6 +27,7 @@ import {
   User,
 } from "lucide-react";
 import Pagination from "../components/common/Pagination";
+import { CheckSquare, Square } from "lucide-react";
 
 function ProblemAnalysisPage() {
   const { user } = useAuth();
@@ -56,8 +57,10 @@ function ProblemAnalysisPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // For tracking if filters have been applied
-  const [filtersApplied, setFiltersApplied] = useState(false);
+  // Add these state variables to your component
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [selectedProblemTypes, setSelectedProblemTypes] = useState([]);
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
 
   // Colors for charts
   const COLORS = [
@@ -105,13 +108,17 @@ function ProblemAnalysisPage() {
     params.append("page", currentPage);
     params.append("limit", pageSize);
 
-    // Add filter parameters
-    if (selectedRoom !== "all") {
-      params.append("equipment_room", selectedRoom);
+    // Add filter parameters - only if they have values
+    if (selectedRooms.length > 0) {
+      selectedRooms.forEach((room) => params.append("room", room));
     }
 
-    if (selectedProblemType !== "all") {
-      params.append("type", selectedProblemType);
+    if (selectedProblemTypes.length > 0) {
+      selectedProblemTypes.forEach((type) => params.append("type", type));
+    }
+
+    if (selectedStatuses.length > 0) {
+      selectedStatuses.forEach((status) => params.append("status", status));
     }
 
     if (dateRange.startDate) {
@@ -126,8 +133,27 @@ function ProblemAnalysisPage() {
       params.append("search", debouncedSearch);
     }
 
-    console.log("Query params:", params.toString());
     return params;
+  };
+
+  const handleRoomToggle = (room) => {
+    setSelectedRooms((prev) =>
+      prev.includes(room) ? prev.filter((r) => r !== room) : [...prev, room]
+    );
+  };
+
+  const handleProblemTypeToggle = (type) => {
+    setSelectedProblemTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
+  const handleStatusToggle = (status) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(status)
+        ? prev.filter((s) => s !== status)
+        : [...prev, status]
+    );
   };
 
   // Fetch data
@@ -137,6 +163,7 @@ function ProblemAnalysisPage() {
     setLoading(true);
     try {
       const params = buildQueryParams();
+
       console.log("Fetching data with params:", params.toString());
 
       // Fetch data in parallel with filters applied
@@ -171,7 +198,9 @@ function ProblemAnalysisPage() {
 
         // Extract available rooms for filter dropdown
         const rooms = roomsResponse.data.data.map((item) => item.room);
-        setAvailableRooms(rooms);
+        // Remove duplicates and filter out empty/null values
+        const uniqueRooms = [...new Set(rooms)].filter(Boolean);
+        setAvailableRooms(uniqueRooms);
       }
 
       // Process summary stats
@@ -184,8 +213,6 @@ function ProblemAnalysisPage() {
         setCompletedProblems(completedResponse.data.data || []);
         setTotalPages(completedResponse.data.totalPages || 1);
       }
-
-      setFiltersApplied(false);
     } catch (error) {
       console.error("Error fetching analysis data:", error);
       showError("ไม่สามารถโหลดข้อมูลการวิเคราะห์ได้");
@@ -198,16 +225,15 @@ function ProblemAnalysisPage() {
   useEffect(() => {
     if (!hasPermission) return;
     fetchData();
-  }, [hasPermission, currentPage, debouncedSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPermission]);
 
-  // Fetch data when filters change (using the Apply button)
+  // Fetch data when page changes or search query changes
   useEffect(() => {
-    if (filtersApplied) {
-      console.log("Filters applied, fetching new data");
-      setCurrentPage(1); // Reset to first page on filter application
-      fetchData();
-    }
-  }, [filtersApplied]);
+    if (!hasPermission) return;
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, debouncedSearch]);
 
   const handleRoomChange = (e) => {
     setSelectedRoom(e.target.value);
@@ -229,27 +255,25 @@ function ProblemAnalysisPage() {
   };
 
   const handleApplyFilters = () => {
-    console.log("Applying filters:", {
-      room: selectedRoom,
-      type: selectedProblemType,
-      dateRange,
-      search: searchQuery,
-    });
-    setFiltersApplied(true);
+    // Reset to first page when applying filters
+    setCurrentPage(1);
+    fetchData();
   };
 
   const handleResetFilters = () => {
-    setSelectedRoom("all");
-    setSelectedProblemType("all");
+    setSelectedRooms([]);
+    setSelectedProblemTypes([]);
+    setSelectedStatuses([]);
     setDateRange({ startDate: "", endDate: "" });
     setSearchQuery("");
     setDebouncedSearch("");
 
-    console.log("Filters reset");
+    // Reset to first page
+    setCurrentPage(1);
 
-    // Trigger a refetch with reset filters
+    // Use setTimeout to ensure state updates before fetching
     setTimeout(() => {
-      setFiltersApplied(true);
+      fetchData();
     }, 0);
   };
 
@@ -279,10 +303,10 @@ function ProblemAnalysisPage() {
       default:
         return {
           icon: <HelpCircle className="w-4 h-4" />,
-          label: "ไม่ระบุ",
-          bgColor: "bg-gray-100",
-          textColor: "text-gray-800",
-          borderColor: "border-gray-200",
+          label: "ซอฟต์แวร์", // Default to software for any unknown types
+          bgColor: "bg-blue-100",
+          textColor: "text-blue-800",
+          borderColor: "border-blue-200",
         };
     }
   };
@@ -319,21 +343,14 @@ function ProblemAnalysisPage() {
 
   // Calculate total counts for problem types
   const totalHardware = monthlyStats.reduce(
-    (sum, item) => sum + (item.hardware || 0),
+    (sum, item) => sum + (parseInt(item.hardware) || 0),
     0
   );
   const totalSoftware = monthlyStats.reduce(
-    (sum, item) => sum + (item.software || 0),
+    (sum, item) => sum + (parseInt(item.software) || 0),
     0
   );
-  // Removed totalOther calculation
   const totalProblems = totalHardware + totalSoftware;
-
-  // Create data for problem type summary pie chart
-  const problemTypeSummary = [
-    { name: "ฮาร์ดแวร์", value: totalHardware, color: "#0088FE" },
-    { name: "ซอฟต์แวร์", value: totalSoftware, color: "#00C49F" },
-  ];
 
   // Calculate resolved vs unresolved
   const resolvedStatus = summary.statuses.find((s) => s.status_id === 3) || {
@@ -343,18 +360,27 @@ function ProblemAnalysisPage() {
     count: 0,
   };
   const inProgressStatuses =
-    summary.statuses.filter((s) => ![3, 8].includes(s.status_id)) || [];
+    summary.statuses.filter((s) => ![3, 8].includes(parseInt(s.status_id))) ||
+    [];
   const inProgressCount = inProgressStatuses.reduce(
-    (sum, status) => sum + status.count,
+    (sum, status) => sum + parseInt(status.count || 0),
     0
   );
 
   // Status summary for second chart
   const statusSummary = [
-    { name: "เสร็จสิ้น", value: resolvedStatus.count, color: "#00C49F" },
-    { name: "ชำรุดเสียหาย", value: damagedStatus.count, color: "#FF8042" },
+    {
+      name: "เสร็จสิ้น",
+      value: parseInt(resolvedStatus.count) || 0,
+      color: "#00C49F",
+    },
+    {
+      name: "ชำรุดเสียหาย",
+      value: parseInt(damagedStatus.count) || 0,
+      color: "#FF8042",
+    },
     { name: "อยู่ระหว่างดำเนินการ", value: inProgressCount, color: "#8884D8" },
-  ];
+  ].filter((item) => item.value > 0); // Filter out zero values
 
   return (
     <DashboardLayout>
@@ -376,45 +402,116 @@ function ProblemAnalysisPage() {
             <h3 className="text-lg font-medium">ตัวกรอง</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            {/* Room filter */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+            {/* Room filter with checkboxes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 ห้อง
               </label>
-              <select
-                value={selectedRoom}
-                onChange={handleRoomChange}
-                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              >
-                <option value="all">ทั้งหมด</option>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
                 {availableRooms.map((room) => (
-                  <option key={room} value={room}>
-                    {room}
-                  </option>
+                  <label
+                    key={room}
+                    className="flex items-center space-x-2 cursor-pointer"
+                  >
+                    <div
+                      onClick={() => handleRoomToggle(room)}
+                      className="flex-shrink-0"
+                    >
+                      {selectedRooms.includes(room) ? (
+                        <CheckSquare className="h-5 w-5 text-indigo-600" />
+                      ) : (
+                        <Square className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-700">{room}</span>
+                  </label>
                 ))}
-              </select>
+                {availableRooms.length === 0 && (
+                  <p className="text-sm text-gray-500">ไม่พบข้อมูลห้อง</p>
+                )}
+              </div>
             </div>
 
-            {/* Problem type filter */}
+            {/* Problem type filter with checkboxes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 ประเภทปัญหา
               </label>
-              <select
-                value={selectedProblemType}
-                onChange={handleProblemTypeChange}
-                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              >
-                <option value="all">ทั้งหมด</option>
-                <option value="hardware">ฮาร์ดแวร์</option>
-                <option value="software">ซอฟต์แวร์</option>
-              </select>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <div
+                    onClick={() => handleProblemTypeToggle("hardware")}
+                    className="flex-shrink-0"
+                  >
+                    {selectedProblemTypes.includes("hardware") ? (
+                      <CheckSquare className="h-5 w-5 text-indigo-600" />
+                    ) : (
+                      <Square className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-700">ฮาร์ดแวร์</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <div
+                    onClick={() => handleProblemTypeToggle("software")}
+                    className="flex-shrink-0"
+                  >
+                    {selectedProblemTypes.includes("software") ? (
+                      <CheckSquare className="h-5 w-5 text-indigo-600" />
+                    ) : (
+                      <Square className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-700">ซอฟต์แวร์</span>
+                </label>
+              </div>
             </div>
 
+            {/* Status filter with checkboxes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                สถานะ
+              </label>
+              <div className="space-y-2">
+                {summary.statuses.map((status) => (
+                  <label
+                    key={status.status_id}
+                    className="flex items-center space-x-2 cursor-pointer"
+                  >
+                    <div
+                      onClick={() =>
+                        handleStatusToggle(status.status_id.toString())
+                      }
+                      className="flex-shrink-0"
+                    >
+                      {selectedStatuses.includes(
+                        status.status_id.toString()
+                      ) ? (
+                        <CheckSquare className="h-5 w-5 text-indigo-600" />
+                      ) : (
+                        <Square className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex items-center">
+                      <span
+                        className="w-3 h-3 rounded-full mr-2"
+                        style={{ backgroundColor: status.color || "#888" }}
+                      ></span>
+                      <span className="text-sm text-gray-700">
+                        {status.status_name}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* Date range filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 ช่วงวันที่
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -425,7 +522,7 @@ function ProblemAnalysisPage() {
                   <input
                     type="date"
                     className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    value={dateRange.startDate || ""}
+                    value={dateRange.startDate}
                     onChange={(e) => handleDateChange(e, "startDate")}
                   />
                 </div>
@@ -436,7 +533,7 @@ function ProblemAnalysisPage() {
                   <input
                     type="date"
                     className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    value={dateRange.endDate || ""}
+                    value={dateRange.endDate}
                     onChange={(e) => handleDateChange(e, "endDate")}
                   />
                 </div>
@@ -445,7 +542,7 @@ function ProblemAnalysisPage() {
 
             {/* Search filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 ค้นหา
               </label>
               <div className="relative rounded-md shadow-sm">
@@ -464,7 +561,7 @@ function ProblemAnalysisPage() {
           </div>
 
           {/* Filter action buttons */}
-          <div className="flex justify-end space-x-3 mt-2">
+          <div className="flex justify-end space-x-3 mt-4">
             <button
               onClick={handleResetFilters}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -479,7 +576,6 @@ function ProblemAnalysisPage() {
             </button>
           </div>
         </div>
-
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
@@ -497,7 +593,7 @@ function ProblemAnalysisPage() {
             </h3>
             <div className="flex items-center">
               <p className="text-3xl font-bold text-green-600">
-                {resolvedStatus.count}
+                {resolvedStatus.count || 0}
               </p>
               <span className="text-sm text-gray-500 ml-2">
                 {summary.total > 0
@@ -531,7 +627,7 @@ function ProblemAnalysisPage() {
             </h3>
             <div className="flex items-center">
               <p className="text-3xl font-bold text-orange-600">
-                {damagedStatus.count}
+                {damagedStatus.count || 0}
               </p>
               <span className="text-sm text-gray-500 ml-2">
                 {summary.total > 0
@@ -554,6 +650,13 @@ function ProblemAnalysisPage() {
             {loading ? (
               <div className="flex justify-center items-center h-80">
                 <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
+              </div>
+            ) : monthlyStats.length === 0 ? (
+              <div className="flex justify-center items-center h-80 bg-gray-50 rounded-lg">
+                <div className="text-center text-gray-500">
+                  <HelpCircle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  <p>ไม่พบข้อมูลสำหรับการค้นหานี้</p>
+                </div>
               </div>
             ) : (
               <div className="h-80">
@@ -584,7 +687,7 @@ function ProblemAnalysisPage() {
               </div>
             )}
 
-            {/* Problem type summary statistics - Changed from grid-cols-3 to grid-cols-2 */}
+            {/* Problem type summary statistics */}
             <div className="mt-6 grid grid-cols-2 gap-3">
               <div className="bg-blue-50 p-3 rounded-lg text-center">
                 <div className="flex items-center justify-center mb-1">
@@ -633,6 +736,13 @@ function ProblemAnalysisPage() {
               <div className="flex justify-center items-center h-80">
                 <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
               </div>
+            ) : statusSummary.length === 0 ? (
+              <div className="flex justify-center items-center h-80 bg-gray-50 rounded-lg">
+                <div className="text-center text-gray-500">
+                  <HelpCircle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  <p>ไม่พบข้อมูลสำหรับการค้นหานี้</p>
+                </div>
+              </div>
             ) : (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
@@ -671,7 +781,7 @@ function ProblemAnalysisPage() {
               {roomStats.length > 0 ? (
                 <div className="space-y-2">
                   {roomStats.slice(0, 5).map((room, index) => (
-                    <div key={room.room} className="flex items-center">
+                    <div key={index} className="flex items-center">
                       <span
                         className="w-3 h-3 rounded-full mr-2"
                         style={{
@@ -679,14 +789,14 @@ function ProblemAnalysisPage() {
                         }}
                       ></span>
                       <span className="text-sm text-gray-700 mr-2">
-                        {room.room}:
+                        {room.room || "ไม่ระบุห้อง"}:
                       </span>
                       <div className="flex-1 bg-gray-200 rounded-full h-2.5">
                         <div
                           className="h-2.5 rounded-full"
                           style={{
                             width: `${Math.round(
-                              (room.total / roomStats[0].total) * 100
+                              (room.total / (roomStats[0]?.total || 1)) * 100
                             )}%`,
                             backgroundColor: COLORS[index % COLORS.length],
                           }}
@@ -743,7 +853,7 @@ function ProblemAnalysisPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ประเภทปัญหา
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-mediumtext-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ผู้แจ้ง
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -836,7 +946,7 @@ function ProblemAnalysisPage() {
                           <div className="flex items-center">
                             <User className="h-4 w-4 text-gray-400 mr-2" />
                             <span className="text-sm text-gray-900">
-                              {problem.reporter_name}
+                              {problem.reporter_name || "ไม่ระบุ"}
                             </span>
                           </div>
                         </td>
@@ -853,12 +963,15 @@ function ProblemAnalysisPage() {
                             className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
                             style={{
                               backgroundColor:
-                                problem.status_id === 3 ? "#ecfdf5" : "#fff7ed", // Green bg for completed, orange bg for damaged
+                                problem.status_color ||
+                                (problem.status_id === 3
+                                  ? "#ecfdf5"
+                                  : "#fff7ed"),
                               color:
-                                problem.status_id === 3 ? "#065f46" : "#9a3412", // Green text for completed, orange text for damaged
+                                problem.status_id === 3 ? "#065f46" : "#9a3412",
                               borderWidth: "1px",
                               borderColor:
-                                problem.status_id === 3 ? "#a7f3d0" : "#fed7aa", // Green border for completed, orange border for damaged
+                                problem.status_id === 3 ? "#a7f3d0" : "#fed7aa",
                             }}
                           >
                             <span
@@ -867,10 +980,10 @@ function ProblemAnalysisPage() {
                                 backgroundColor:
                                   problem.status_id === 3
                                     ? "#10b981"
-                                    : "#f97316", // Green dot for completed, orange dot for damaged
+                                    : "#f97316",
                               }}
                             ></span>
-                            {problem.status_name}
+                            {problem.status_name || "ไม่ระบุสถานะ"}
                           </span>
                         </td>
                       </tr>

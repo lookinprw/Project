@@ -1125,120 +1125,195 @@ router.get("/image/:filename", auth, async (req, res) => {
 });
 
 // Get monthly statistics - for dashboard
+// Add these routes to your problem.routes.js file
+
+// Get monthly statistics with filter support
 router.get(
   "/stats/monthly",
   auth,
   checkRole(["admin", "equipment_manager"]),
   async (req, res) => {
     try {
-      // Get current month and year
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1; // JavaScript months are 0-based
+      // Extract filter parameters
+      const { startDate, endDate, problemType, room, statusId } = req.query;
 
-      // Get the last 6 months
-      let months = [];
-      for (let i = 0; i < 6; i++) {
-        let month = currentMonth - i;
-        let year = currentYear;
+      // Build the WHERE clause dynamically
+      let whereConditions = [];
+      let params = [];
 
-        if (month <= 0) {
-          month += 12;
-          year -= 1;
-        }
-
-        months.push({ month, year });
+      // Date range filter
+      if (startDate && endDate) {
+        whereConditions.push(
+          "p.created_at BETWEEN ? AND DATE_ADD(?, INTERVAL 1 DAY)"
+        );
+        params.push(startDate, endDate);
+      } else if (startDate) {
+        whereConditions.push("p.created_at >= ?");
+        params.push(startDate);
+      } else if (endDate) {
+        whereConditions.push("p.created_at <= DATE_ADD(?, INTERVAL 1 DAY)");
+        params.push(endDate);
+      } else {
+        // Default to last 6 months if no date range specified
+        whereConditions.push(
+          "p.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)"
+        );
       }
 
-      // Build the SQL query
+      // Problem type filter
+      if (problemType && problemType !== "all") {
+        whereConditions.push("p.problem_type = ?");
+        params.push(problemType);
+      }
+
+      // Room filter
+      if (room && room !== "all") {
+        whereConditions.push("e.room = ?");
+        params.push(room);
+      }
+
+      // Status filter
+      if (statusId && statusId !== "all") {
+        whereConditions.push("p.status_id = ?");
+        params.push(statusId);
+      }
+
+      // Combine all conditions
+      const whereClause = whereConditions.length
+        ? `WHERE ${whereConditions.join(" AND ")}`
+        : "";
+
+      // Build the query with filters
       const query = `
-      SELECT 
-        YEAR(created_at) as year,
-        MONTH(created_at) as month,
-        COUNT(*) as total,
-        SUM(CASE WHEN status_id = 3 THEN 1 ELSE 0 END) as resolved,
-        SUM(CASE WHEN status_id = 4 THEN 1 ELSE 0 END) as unfixable,
-        SUM(CASE WHEN problem_type = 'hardware' THEN 1 ELSE 0 END) as hardware,
-        SUM(CASE WHEN problem_type = 'software' THEN 1 ELSE 0 END) as software,
-        SUM(CASE WHEN problem_type = 'other' THEN 1 ELSE 0 END) as other
-      FROM problems
-      WHERE 
-        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
-        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
-        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
-        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
-        (YEAR(created_at) = ? AND MONTH(created_at) = ?) OR
-        (YEAR(created_at) = ? AND MONTH(created_at) = ?)
-      GROUP BY YEAR(created_at), MONTH(created_at)
-      ORDER BY YEAR(created_at) DESC, MONTH(created_at) DESC
-    `;
+        SELECT 
+          YEAR(p.created_at) as year,
+          MONTH(p.created_at) as month,
+          COUNT(*) as total,
+          SUM(CASE WHEN p.status_id = 3 THEN 1 ELSE 0 END) as resolved,
+          SUM(CASE WHEN p.status_id = 4 THEN 1 ELSE 0 END) as unfixable,
+          SUM(CASE WHEN p.problem_type = 'hardware' THEN 1 ELSE 0 END) as hardware,
+          SUM(CASE WHEN p.problem_type = 'software' THEN 1 ELSE 0 END) as software,
+          SUM(CASE WHEN p.problem_type = 'other' THEN 1 ELSE 0 END) as other
+        FROM problems p
+        LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+        ${whereClause}
+        GROUP BY YEAR(p.created_at), MONTH(p.created_at)
+        ORDER BY YEAR(p.created_at) DESC, MONTH(p.created_at) DESC
+        LIMIT 6
+      `;
 
-      // Prepare the parameters
-      const params = months.flatMap((m) => [m.year, m.month]);
-
-      // Execute the query
-      const [results] = await db.execute(query, params);
-
-      // Transform results to include all months (even empty ones)
-      const stats = months.map((m) => {
-        const found = results.find(
-          (r) => r.year === m.year && r.month === m.month
-        );
-
-        if (found) {
-          return found;
-        }
-
-        return {
-          year: m.year,
-          month: m.month,
-          total: 0,
-          resolved: 0,
-          unfixable: 0,
-          hardware: 0,
-          software: 0,
-          other: 0,
-        };
-      });
+      const [results] = await db.query(query, params);
 
       res.json({
         success: true,
-        data: stats,
+        data: results,
       });
     } catch (error) {
-      console.error("Error fetching statistics:", error);
+      console.error("Error fetching monthly statistics:", error);
       res.status(500).json({
         success: false,
-        message: "เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ",
+        message: "เกิดข้อผิดพลาดในการดึงข้อมูลสถิติรายเดือน",
         error: error.message,
       });
     }
   }
 );
 
-// Get current month statistics by room
+// Get room statistics with filter support
+// Add this to your server's problem.routes.js file to ensure all charts respect your filters:
+
+// Update the rooms statistics endpoint to respect status filters
 router.get(
   "/stats/rooms",
   auth,
   checkRole(["admin", "equipment_manager"]),
   async (req, res) => {
     try {
-      const query = `
-      SELECT 
-        e.room,
-        COUNT(*) as total,
-        SUM(CASE WHEN p.problem_type = 'hardware' THEN 1 ELSE 0 END) as hardware,
-        SUM(CASE WHEN p.problem_type = 'software' THEN 1 ELSE 0 END) as software,
-        SUM(CASE WHEN p.problem_type = 'other' THEN 1 ELSE 0 END) as other
-      FROM problems p
-      JOIN equipment e ON p.equipment_id = e.equipment_id
-      WHERE p.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
-      GROUP BY e.room
-      ORDER BY total DESC
-      LIMIT 10
-    `;
+      // Extract filter parameters
+      const { startDate, endDate, type, room, search, status } = req.query;
 
-      const [results] = await db.execute(query);
+      // Build the WHERE clause dynamically
+      let whereConditions = [];
+      let params = [];
+
+      // Date range filter
+      if (startDate && endDate) {
+        whereConditions.push(
+          "p.created_at BETWEEN ? AND DATE_ADD(?, INTERVAL 1 DAY)"
+        );
+        params.push(startDate, endDate);
+      } else if (startDate) {
+        whereConditions.push("p.created_at >= ?");
+        params.push(startDate);
+      } else if (endDate) {
+        whereConditions.push("p.created_at <= DATE_ADD(?, INTERVAL 1 DAY)");
+        params.push(endDate);
+      }
+
+      // Problem type filter - handle arrays
+      if (type && type.length) {
+        const types = Array.isArray(type) ? type : [type];
+        if (types.length > 0) {
+          whereConditions.push(
+            `p.problem_type IN (${types.map(() => "?").join(",")})`
+          );
+          params.push(...types);
+        }
+      }
+
+      // Room filter - handle arrays
+      if (room && room.length) {
+        const rooms = Array.isArray(room) ? room : [room];
+        if (rooms.length > 0) {
+          whereConditions.push(`e.room IN (${rooms.map(() => "?").join(",")})`);
+          params.push(...rooms);
+        }
+      }
+
+      // Status filter - handle arrays
+      if (status && status.length) {
+        const statuses = Array.isArray(status) ? status : [status];
+        if (statuses.length > 0) {
+          whereConditions.push(
+            `p.status_id IN (${statuses.map(() => "?").join(",")})`
+          );
+          params.push(...statuses);
+        }
+      }
+
+      // Search filter
+      if (search) {
+        whereConditions.push(
+          "(e.equipment_id LIKE ? OR e.name LIKE ? OR p.description LIKE ?)"
+        );
+        const searchPattern = `%${search}%`;
+        params.push(searchPattern, searchPattern, searchPattern);
+      }
+
+      // Combine all conditions
+      const whereClause = whereConditions.length
+        ? `WHERE ${whereConditions.join(" AND ")}`
+        : "";
+
+      // Build the query with filters
+      const query = `
+        SELECT 
+          e.room,
+          COUNT(*) as total,
+          SUM(CASE WHEN p.problem_type = 'hardware' THEN 1 ELSE 0 END) as hardware,
+          SUM(CASE WHEN p.problem_type = 'software' THEN 1 ELSE 0 END) as software
+        FROM problems p
+        JOIN equipment e ON p.equipment_id = e.equipment_id
+        ${whereClause}
+        GROUP BY e.room
+        ORDER BY total DESC
+        LIMIT 10
+      `;
+
+      console.log("Room stats query:", query);
+      console.log("Room stats params:", params);
+
+      const [results] = await db.query(query, params);
 
       res.json({
         success: true,
@@ -1248,78 +1323,118 @@ router.get(
       console.error("Error fetching room statistics:", error);
       res.status(500).json({
         success: false,
-        message: "เกิดข้อผิดพลาดในการดึงข้อมูลสถิติตามห้อง",
+        message: "เกิดข้อมูลข้อมูลสถิติตามห้อง",
         error: error.message,
       });
     }
   }
 );
 
-// Get status summary counts
+// Update the /stats/summary endpoint to respect all filters
 router.get("/stats/summary", auth, async (req, res) => {
   try {
-    let query;
+    // Extract filter parameters
+    const { startDate, endDate, type, room, search, status } = req.query;
+
+    // Build filter conditions for the JOIN
+    let whereConditions = [];
     let params = [];
 
-    // Different query based on role
+    // Permission filter based on user role
     if (req.user.role === "reporter") {
-      // For reporters, only show their own problems
-      query = `
-        SELECT 
-          s.id as status_id,
-          s.name as status_name,
-          s.color as status_color,
-          COUNT(p.id) as count
-        FROM status s
-        LEFT JOIN problems p ON s.id = p.status_id AND p.reported_by = ?
-        GROUP BY s.id, s.name, s.color
-        ORDER BY s.id
-      `;
-      params = [req.user.id];
+      whereConditions.push("p.reported_by = ?");
+      params.push(req.user.id);
     } else if (req.user.role === "equipment_assistant") {
-      // For assistants, show problems they're assigned to or pending
-      query = `
-        SELECT 
-          s.id as status_id,
-          s.name as status_name,
-          s.color as status_color,
-          COUNT(CASE WHEN p.status_id = s.id AND 
-            (p.status_id = 1 OR p.assigned_to = ? OR p.reported_by = ?) 
-            THEN p.id END) as count
-        FROM status s
-        LEFT JOIN problems p ON s.id = p.status_id
-        GROUP BY s.id, s.name, s.color
-        ORDER BY s.id
-      `;
-      params = [req.user.id, req.user.id];
-    } else {
-      // For admins and managers, show all problems
-      query = `
-        SELECT 
-          s.id as status_id,
-          s.name as status_name,
-          s.color as status_color,
-          COUNT(p.id) as count
-        FROM status s
-        LEFT JOIN problems p ON s.id = p.status_id
-        GROUP BY s.id, s.name, s.color
-        ORDER BY s.id
-      `;
+      whereConditions.push(
+        "(p.status_id = 1 OR p.assigned_to = ? OR p.reported_by = ?)"
+      );
+      params.push(req.user.id, req.user.id);
     }
 
-    const [results] = await db.execute(query, params);
+    // Date range filter
+    if (startDate && endDate) {
+      whereConditions.push(
+        "p.created_at BETWEEN ? AND DATE_ADD(?, INTERVAL 1 DAY)"
+      );
+      params.push(startDate, endDate);
+    } else if (startDate) {
+      whereConditions.push("p.created_at >= ?");
+      params.push(startDate);
+    } else if (endDate) {
+      whereConditions.push("p.created_at <= DATE_ADD(?, INTERVAL 1 DAY)");
+      params.push(endDate);
+    }
 
-    // Add total count
-    const totalCount = results.reduce(
-      (sum, item) => sum + Number(item.count),
-      0
-    );
+    // Problem type filter - handle arrays
+    if (type && type.length) {
+      const types = Array.isArray(type) ? type : [type];
+      if (types.length > 0) {
+        whereConditions.push(
+          `p.problem_type IN (${types.map(() => "?").join(",")})`
+        );
+        params.push(...types);
+      }
+    }
+
+    // Room filter - handle arrays
+    if (room && room.length) {
+      const rooms = Array.isArray(room) ? room : [room];
+      if (rooms.length > 0) {
+        whereConditions.push(`e.room IN (${rooms.map(() => "?").join(",")})`);
+        params.push(...rooms);
+      }
+    }
+
+    // Status filter is not applied here since we're counting by status
+
+    // Search filter
+    if (search) {
+      whereConditions.push(
+        "(e.equipment_id LIKE ? OR e.name LIKE ? OR p.description LIKE ?)"
+      );
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    // Combine conditions
+    const whereClause = whereConditions.length
+      ? `WHERE ${whereConditions.join(" AND ")}`
+      : "";
+
+    // Modified query with joined equipment table for room filtering
+    const query = `
+      SELECT 
+        s.id as status_id,
+        s.name as status_name,
+        s.color as status_color,
+        COUNT(p.id) as count
+      FROM status s
+      LEFT JOIN problems p ON s.id = p.status_id
+      LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+      ${whereClause}
+      GROUP BY s.id, s.name, s.color
+      ORDER BY s.id
+    `;
+
+    // Count total problems with filters
+    const countQuery = `
+      SELECT COUNT(p.id) as total
+      FROM problems p
+      LEFT JOIN equipment e ON p.equipment_id = e.equipment_id
+      ${whereClause}
+    `;
+
+    console.log("Summary query:", query);
+    console.log("Summary params:", params);
+
+    const [statusResults] = await db.query(query, params);
+    const [totalResult] = await db.query(countQuery, params);
 
     res.json({
       success: true,
       data: {
-        statuses: results,
-        total: totalCount,
+        statuses: statusResults,
+        total: totalResult[0].total || 0,
       },
     });
   } catch (error) {
@@ -1331,5 +1446,4 @@ router.get("/stats/summary", auth, async (req, res) => {
     });
   }
 });
-
 module.exports = router;
