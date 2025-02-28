@@ -422,7 +422,10 @@ router.put("/:id", auth, async (req, res) => {
 
 // Get history of completed assignments
 // Get history of completed assignments for a specific user
-router.get("/history", auth, async (req, res) => {
+// Add this new route to your problem.routes.js file
+
+// Get history of completed assignments (ONLY status_id = 3)
+router.get("/completed-history", auth, async (req, res) => {
   try {
     // Parse query parameters with defaults
     const page = parseInt(req.query.page) || 1;
@@ -432,17 +435,36 @@ router.get("/history", auth, async (req, res) => {
       ? parseInt(req.query.assignedTo)
       : null;
 
-    // Rather than using parameterized LIMIT/OFFSET, build it into the query string
-    // This avoids the type mismatch issues with MySQL
-
-    const statusIds = [3, 4, 8]; // Default completed statuses
-
-    let whereClause = `p.status_id IN (${statusIds.join(",")})`;
+    // Set up where clause - ONLY status_id = 3 (เสร็จสิ้น)
+    let whereClause = "p.status_id = 3";
     let params = [];
 
     if (assignedTo) {
       whereClause += " AND p.assigned_to = ?";
       params.push(assignedTo);
+    }
+
+    // Add search filter if provided
+    if (req.query.search) {
+      whereClause += ` AND (
+        e.equipment_id LIKE ? OR 
+        e.name LIKE ? OR 
+        p.description LIKE ? OR 
+        CONCAT(u.firstname, ' ', u.lastname) LIKE ?
+      )`;
+      const searchPattern = `%${req.query.search}%`;
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    // Add date filters if provided
+    if (req.query.startDate) {
+      whereClause += " AND DATE(p.updated_at) >= ?";
+      params.push(req.query.startDate);
+    }
+
+    if (req.query.endDate) {
+      whereClause += " AND DATE(p.updated_at) <= ?";
+      params.push(req.query.endDate);
     }
 
     // Construct the query with LIMIT/OFFSET values directly in the SQL
@@ -479,6 +501,10 @@ router.get("/history", auth, async (req, res) => {
         COUNT(*) as total
       FROM 
         problems p
+      LEFT JOIN 
+        equipment e ON p.equipment_id = e.equipment_id
+      LEFT JOIN 
+        users u ON p.reported_by = u.id
       WHERE 
         ${whereClause}
     `;
@@ -502,7 +528,7 @@ router.get("/history", auth, async (req, res) => {
       totalPages,
     });
   } catch (error) {
-    console.error("Error fetching assignment history:", error);
+    console.error("Error fetching completed assignments history:", error);
     res.status(500).json({
       success: false,
       message: "เกิดข้อผิดพลาดในการดึงข้อมูลประวัติการซ่อม",

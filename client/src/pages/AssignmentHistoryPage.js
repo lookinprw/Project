@@ -36,8 +36,9 @@ function AssignmentHistoryPage() {
     startDate: "",
     endDate: "",
   });
-  const [selectedStatusIds, setSelectedStatusIds] = useState([]);
-  const [statuses, setStatuses] = useState([]);
+
+  // Only keeping status_id 3 (เสร็จสิ้น)
+  const [selectedStatusIds] = useState([3]);
 
   // Handle search input with debounce
   useEffect(() => {
@@ -48,23 +49,6 @@ function AssignmentHistoryPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  // Fetch statuses for filter
-  const fetchStatuses = async () => {
-    try {
-      const response = await api.get("/status");
-      if (response.data.success) {
-        // Only include "completed" statuses (e.g., Resolved, Closed, etc.)
-        const completedStatusIds = [3, 4, 8]; // Example: 3=Completed, 4=Cannot Fix, 8=Damaged
-        const filteredStatuses = response.data.data.filter((status) =>
-          completedStatusIds.includes(status.id)
-        );
-        setStatuses(filteredStatuses);
-      }
-    } catch (error) {
-      console.error("Error fetching statuses:", error);
-    }
-  };
 
   // Fetch completed assignments for the current user
   const fetchCompletedAssignments = async () => {
@@ -80,6 +64,7 @@ function AssignmentHistoryPage() {
       params.append("page", currentPage);
       params.append("limit", pageSize);
       params.append("assignedTo", currentUser.id); // Always filter by current user
+      params.append("status", 3); // Only status 3 (เสร็จสิ้น)
 
       if (debouncedSearch) {
         params.append("search", debouncedSearch);
@@ -93,17 +78,26 @@ function AssignmentHistoryPage() {
         params.append("endDate", dateRange.endDate);
       }
 
-      // Add selected statuses if any are selected
-      if (selectedStatusIds.length > 0) {
-        selectedStatusIds.forEach((id) => params.append("status", id));
-      }
-
       console.log("Fetching assignments with params:", params.toString());
 
-      const response = await api.get(`/problems/history?${params.toString()}`);
+      const response = await api.get(
+        `/problems/completed-history?${params.toString()}`
+      );
 
       if (response.data.success) {
-        setCompletedAssignments(response.data.data || []);
+        // Process the data to calculate duration for each item
+        const processedData = (response.data.data || []).map((item) => {
+          // Add calculated_duration field using our improved function
+          return {
+            ...item,
+            calculated_duration: calculateWorkDuration(
+              item.assigned_at,
+              item.updated_at
+            ),
+          };
+        });
+
+        setCompletedAssignments(processedData);
         setTotalPages(response.data.totalPages || 1);
       } else {
         console.error("API returned failure:", response.data);
@@ -129,8 +123,6 @@ function AssignmentHistoryPage() {
       navigate("/dashboard");
       return;
     }
-
-    fetchStatuses();
   }, [currentUser, navigate]);
 
   // Fetch data when filters change
@@ -138,7 +130,7 @@ function AssignmentHistoryPage() {
     if (currentUser?.role === "equipment_assistant") {
       fetchCompletedAssignments();
     }
-  }, [currentPage, debouncedSearch, dateRange, selectedStatusIds]);
+  }, [currentPage, debouncedSearch, dateRange]);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -154,55 +146,50 @@ function AssignmentHistoryPage() {
     setCurrentPage(1); // Reset to first page
   };
 
-  // Handle status filter change
-  const handleStatusChange = (statusId) => {
-    setSelectedStatusIds((prev) => {
-      if (prev.includes(statusId)) {
-        return prev.filter((id) => id !== statusId);
-      } else {
-        return [...prev, statusId];
-      }
-    });
-    setCurrentPage(1); // Reset to first page
-  };
-
-  // Calculate work duration in hours
-  const calculateWorkDuration = (assignedDate, completedDate) => {
-    if (!assignedDate || !completedDate) return "N/A";
+  // Improved function to calculate work duration
+  const calculateWorkDuration = (assignedAt, updatedAt) => {
+    // Check if we have valid date strings
+    if (!assignedAt || !updatedAt) {
+      console.log("Missing dates:", { assignedAt, updatedAt });
+      return "0 นาที";
+    }
 
     try {
-      const assigned = new Date(assignedDate);
-      const completed = new Date(completedDate);
+      // Parse the dates (assuming they're in ISO format or similar)
+      const assignedDate = new Date(assignedAt);
+      const updatedDate = new Date(updatedAt);
+
+      // Validate the dates
+      if (isNaN(assignedDate.getTime()) || isNaN(updatedDate.getTime())) {
+        console.log("Invalid date format:", { assignedAt, updatedAt });
+        return "0 นาที";
+      }
 
       // Calculate difference in milliseconds
-      const diff = completed - assigned;
+      const diffMs = updatedDate.getTime() - assignedDate.getTime();
 
-      // Convert to hours (rounded to 1 decimal place)
-      const hours = Math.round((diff / (1000 * 60 * 60)) * 10) / 10;
+      // If negative or zero difference, return minimal time
+      if (diffMs <= 0) {
+        return "0 นาที";
+      }
 
-      return `${hours} ชั่วโมง`;
+      // Calculate hours and minutes
+      const totalMinutes = Math.floor(diffMs / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+
+      // Format the result
+      if (hours === 0) {
+        return `${minutes} นาที`;
+      } else if (minutes === 0) {
+        return `${hours} ชั่วโมง`;
+      } else {
+        return `${hours} ชั่วโมง ${minutes} นาที`;
+      }
     } catch (error) {
       console.error("Error calculating duration:", error);
-      return "N/A";
+      return "0 นาที";
     }
-  };
-
-  // Format the resolution method based on status and comments
-  const getResolutionMethod = (status, comment) => {
-    if (!status) return "-";
-
-    if (status.id === 4) {
-      // Cannot Fix
-      return `ไม่สามารถซ่อมได้: ${comment || "ไม่ระบุเหตุผล"}`;
-    } else if (status.id === 3) {
-      // Completed
-      return comment || "ซ่อมเสร็จสิ้น";
-    } else if (status.id === 8) {
-      // Damaged
-      return `ชำรุดเสียหาย: ${comment || "ไม่ระบุรายละเอียด"}`;
-    }
-
-    return comment || "-";
   };
 
   if (loading && completedAssignments.length === 0) {
@@ -238,7 +225,7 @@ function AssignmentHistoryPage() {
             <h3 className="text-lg font-medium">ตัวกรอง</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Date range filter */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -267,28 +254,6 @@ function AssignmentHistoryPage() {
                     onChange={(e) => handleDateChange(e, "endDate")}
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* Status filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                สถานะ
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {statuses.map((status) => (
-                  <label key={status.id} className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedStatusIds.includes(status.id)}
-                      onChange={() => handleStatusChange(status.id)}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-600">
-                      {status.name}
-                    </span>
-                  </label>
-                ))}
               </div>
             </div>
 
@@ -341,9 +306,6 @@ function AssignmentHistoryPage() {
                     ระยะเวลาดำเนินการ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    วิธีการแก้ไข
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     สถานะ
                   </th>
                 </tr>
@@ -383,21 +345,13 @@ function AssignmentHistoryPage() {
                       <div className="flex items-center">
                         <Clock className="h-4 w-4 text-gray-400 mr-2" />
                         <span className="text-sm text-gray-900">
-                          {calculateWorkDuration(
-                            assignment.assigned_at,
-                            assignment.updated_at
-                          )}
+                          {assignment.calculated_duration ||
+                            calculateWorkDuration(
+                              assignment.assigned_at,
+                              assignment.updated_at
+                            )}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getResolutionMethod(
-                        {
-                          id: assignment.status_id,
-                          name: assignment.status_name,
-                        },
-                        assignment.comment
-                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <StatusBadge

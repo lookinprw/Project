@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useAlert } from "../context/AlertContext";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import {
   BarChart,
@@ -16,26 +17,58 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import api from "../utils/axios";
+import {
+  Filter,
+  Calendar,
+  Search,
+  HardDrive,
+  Monitor,
+  HelpCircle,
+  User,
+} from "lucide-react";
+import Pagination from "../components/common/Pagination";
 
 function ProblemAnalysisPage() {
   const { user } = useAuth();
   const { showSuccess, showError } = useAlert();
+  const navigate = useNavigate();
 
   // State
   const [loading, setLoading] = useState(true);
   const [monthlyStats, setMonthlyStats] = useState([]);
   const [roomStats, setRoomStats] = useState([]);
   const [summary, setSummary] = useState({ statuses: [], total: 0 });
+  const [completedProblems, setCompletedProblems] = useState([]);
+
+  // Pagination for the completed problems table
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize] = useState(10);
+
+  // Filter states
+  const [selectedRoom, setSelectedRoom] = useState("all");
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [dateRange, setDateRange] = useState({
+    startDate: "",
+    endDate: "",
+  });
+  const [selectedProblemType, setSelectedProblemType] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // For tracking if filters have been applied
+  const [filtersApplied, setFiltersApplied] = useState(false);
 
   // Colors for charts
   const COLORS = [
-    "#0088FE",
-    "#00C49F",
-    "#FFBB28",
-    "#FF8042",
-    "#8884D8",
-    "#82ca9d",
+    "#0088FE", // blue
+    "#00C49F", // teal
+    "#FFBB28", // yellow
+    "#FF8042", // orange
+    "#8884D8", // purple
+    "#82ca9d", // green
   ];
+
   const monthNames = [
     "ม.ค.",
     "ก.พ.",
@@ -55,53 +88,204 @@ function ProblemAnalysisPage() {
   const hasPermission =
     user && ["admin", "equipment_manager"].includes(user.role);
 
-  // Fetch data
+  // Handle search input with debounce
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Build query parameters based on filters
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+
+    // Add pagination parameters
+    params.append("page", currentPage);
+    params.append("limit", pageSize);
+
+    // Add filter parameters
+    if (selectedRoom !== "all") {
+      params.append("equipment_room", selectedRoom);
+    }
+
+    if (selectedProblemType !== "all") {
+      params.append("type", selectedProblemType);
+    }
+
+    if (dateRange.startDate) {
+      params.append("startDate", dateRange.startDate);
+    }
+
+    if (dateRange.endDate) {
+      params.append("endDate", dateRange.endDate);
+    }
+
+    if (debouncedSearch) {
+      params.append("search", debouncedSearch);
+    }
+
+    console.log("Query params:", params.toString());
+    return params;
+  };
+
+  // Fetch data
+  const fetchData = async () => {
     if (!hasPermission) return;
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch all data in parallel
-        const [monthlyResponse, roomsResponse, summaryResponse] =
-          await Promise.all([
-            api.get("/problems/stats/monthly"),
-            api.get("/problems/stats/rooms"),
-            api.get("/problems/stats/summary"),
-          ]);
+    setLoading(true);
+    try {
+      const params = buildQueryParams();
+      console.log("Fetching data with params:", params.toString());
 
-        // Process monthly stats
-        if (monthlyResponse.data.success) {
-          // Convert to chart-friendly format and add Thai month names
-          const processedData = monthlyResponse.data.data
-            .map((item) => ({
-              ...item,
-              name: `${monthNames[item.month - 1]} ${item.year + 543}`, // Convert to Buddhist Era
-            }))
-            .reverse(); // Reverse to show chronological order
+      // Fetch data in parallel with filters applied
+      const [
+        monthlyResponse,
+        roomsResponse,
+        summaryResponse,
+        completedResponse,
+      ] = await Promise.all([
+        api.get(`/problems/stats/monthly?${params.toString()}`),
+        api.get(`/problems/stats/rooms?${params.toString()}`),
+        api.get(`/problems/stats/summary?${params.toString()}`),
+        api.get(`/problems/completed-history?${params.toString()}`),
+      ]);
 
-          setMonthlyStats(processedData);
-        }
+      // Process monthly stats
+      if (monthlyResponse.data.success) {
+        // Convert to chart-friendly format and add Thai month names
+        const processedData = monthlyResponse.data.data
+          .map((item) => ({
+            ...item,
+            name: `${monthNames[item.month - 1]} ${item.year + 543}`, // Convert to Buddhist Era
+          }))
+          .reverse(); // Reverse to show chronological order
 
-        // Process room stats
-        if (roomsResponse.data.success) {
-          setRoomStats(roomsResponse.data.data);
-        }
-
-        // Process summary stats
-        if (summaryResponse.data.success) {
-          setSummary(summaryResponse.data.data);
-        }
-      } catch (error) {
-        console.error("Error fetching analysis data:", error);
-        showError("ไม่สามารถโหลดข้อมูลการวิเคราะห์ได้");
-      } finally {
-        setLoading(false);
+        setMonthlyStats(processedData);
       }
-    };
 
+      // Process room stats
+      if (roomsResponse.data.success) {
+        setRoomStats(roomsResponse.data.data);
+
+        // Extract available rooms for filter dropdown
+        const rooms = roomsResponse.data.data.map((item) => item.room);
+        setAvailableRooms(rooms);
+      }
+
+      // Process summary stats
+      if (summaryResponse.data.success) {
+        setSummary(summaryResponse.data.data);
+      }
+
+      // Process completed problems for table
+      if (completedResponse.data.success) {
+        setCompletedProblems(completedResponse.data.data || []);
+        setTotalPages(completedResponse.data.totalPages || 1);
+      }
+
+      setFiltersApplied(false);
+    } catch (error) {
+      console.error("Error fetching analysis data:", error);
+      showError("ไม่สามารถโหลดข้อมูลการวิเคราะห์ได้");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch initial data
+  useEffect(() => {
+    if (!hasPermission) return;
     fetchData();
-  }, [hasPermission, showError]);
+  }, [hasPermission, currentPage, debouncedSearch]);
+
+  // Fetch data when filters change (using the Apply button)
+  useEffect(() => {
+    if (filtersApplied) {
+      console.log("Filters applied, fetching new data");
+      setCurrentPage(1); // Reset to first page on filter application
+      fetchData();
+    }
+  }, [filtersApplied]);
+
+  const handleRoomChange = (e) => {
+    setSelectedRoom(e.target.value);
+  };
+
+  const handleProblemTypeChange = (e) => {
+    setSelectedProblemType(e.target.value);
+  };
+
+  const handleDateChange = (e, field) => {
+    setDateRange((prev) => ({
+      ...prev,
+      [field]: e.target.value,
+    }));
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleApplyFilters = () => {
+    console.log("Applying filters:", {
+      room: selectedRoom,
+      type: selectedProblemType,
+      dateRange,
+      search: searchQuery,
+    });
+    setFiltersApplied(true);
+  };
+
+  const handleResetFilters = () => {
+    setSelectedRoom("all");
+    setSelectedProblemType("all");
+    setDateRange({ startDate: "", endDate: "" });
+    setSearchQuery("");
+    setDebouncedSearch("");
+
+    console.log("Filters reset");
+
+    // Trigger a refetch with reset filters
+    setTimeout(() => {
+      setFiltersApplied(true);
+    }, 0);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // UI helper function for problem type
+  const getProblemTypeDetails = (type) => {
+    switch (type) {
+      case "hardware":
+        return {
+          icon: <HardDrive className="w-4 h-4" />,
+          label: "ฮาร์ดแวร์",
+          bgColor: "bg-red-100",
+          textColor: "text-red-800",
+          borderColor: "border-red-200",
+        };
+      case "software":
+        return {
+          icon: <Monitor className="w-4 h-4" />,
+          label: "ซอฟต์แวร์",
+          bgColor: "bg-blue-100",
+          textColor: "text-blue-800",
+          borderColor: "border-blue-200",
+        };
+      default:
+        return {
+          icon: <HelpCircle className="w-4 h-4" />,
+          label: "ไม่ระบุ",
+          bgColor: "bg-gray-100",
+          textColor: "text-gray-800",
+          borderColor: "border-gray-200",
+        };
+    }
+  };
 
   if (!hasPermission) {
     return (
@@ -120,7 +304,7 @@ function ProblemAnalysisPage() {
     );
   }
 
-  if (loading) {
+  if (loading && monthlyStats.length === 0) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -132,6 +316,45 @@ function ProblemAnalysisPage() {
       </DashboardLayout>
     );
   }
+
+  // Calculate total counts for problem types
+  const totalHardware = monthlyStats.reduce(
+    (sum, item) => sum + (item.hardware || 0),
+    0
+  );
+  const totalSoftware = monthlyStats.reduce(
+    (sum, item) => sum + (item.software || 0),
+    0
+  );
+  // Removed totalOther calculation
+  const totalProblems = totalHardware + totalSoftware;
+
+  // Create data for problem type summary pie chart
+  const problemTypeSummary = [
+    { name: "ฮาร์ดแวร์", value: totalHardware, color: "#0088FE" },
+    { name: "ซอฟต์แวร์", value: totalSoftware, color: "#00C49F" },
+  ];
+
+  // Calculate resolved vs unresolved
+  const resolvedStatus = summary.statuses.find((s) => s.status_id === 3) || {
+    count: 0,
+  };
+  const damagedStatus = summary.statuses.find((s) => s.status_id === 8) || {
+    count: 0,
+  };
+  const inProgressStatuses =
+    summary.statuses.filter((s) => ![3, 8].includes(s.status_id)) || [];
+  const inProgressCount = inProgressStatuses.reduce(
+    (sum, status) => sum + status.count,
+    0
+  );
+
+  // Status summary for second chart
+  const statusSummary = [
+    { name: "เสร็จสิ้น", value: resolvedStatus.count, color: "#00C49F" },
+    { name: "ชำรุดเสียหาย", value: damagedStatus.count, color: "#FF8042" },
+    { name: "อยู่ระหว่างดำเนินการ", value: inProgressCount, color: "#8884D8" },
+  ];
 
   return (
     <DashboardLayout>
@@ -146,6 +369,117 @@ function ProblemAnalysisPage() {
           </p>
         </div>
 
+        {/* Filter Controls */}
+        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg font-medium">ตัวกรอง</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            {/* Room filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ห้อง
+              </label>
+              <select
+                value={selectedRoom}
+                onChange={handleRoomChange}
+                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              >
+                <option value="all">ทั้งหมด</option>
+                {availableRooms.map((room) => (
+                  <option key={room} value={room}>
+                    {room}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Problem type filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ประเภทปัญหา
+              </label>
+              <select
+                value={selectedProblemType}
+                onChange={handleProblemTypeChange}
+                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              >
+                <option value="all">ทั้งหมด</option>
+                <option value="hardware">ฮาร์ดแวร์</option>
+                <option value="software">ซอฟต์แวร์</option>
+              </select>
+            </div>
+
+            {/* Date range filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ช่วงวันที่
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={dateRange.startDate || ""}
+                    onChange={(e) => handleDateChange(e, "startDate")}
+                  />
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    className="pl-10 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={dateRange.endDate || ""}
+                    onChange={(e) => handleDateChange(e, "endDate")}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Search filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ค้นหา
+              </label>
+              <div className="relative rounded-md shadow-sm">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  placeholder="ค้นหาด้วยรหัสครุภัณฑ์, ปัญหา..."
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter action buttons */}
+          <div className="flex justify-end space-x-3 mt-2">
+            <button
+              onClick={handleResetFilters}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              รีเซ็ต
+            </button>
+            <button
+              onClick={handleApplyFilters}
+              className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              ค้นหา
+            </button>
+          </div>
+        </div>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
@@ -157,155 +491,406 @@ function ProblemAnalysisPage() {
             </p>
           </div>
 
-          {summary.statuses.slice(0, 3).map((status, index) => (
-            <div
-              key={status.status_id}
-              className="bg-white rounded-xl shadow-md p-6 border border-gray-100"
-            >
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                {status.status_name}
-              </h3>
-              <div className="flex items-center">
-                <p
-                  className="text-3xl font-bold"
-                  style={{ color: status.status_color || "#4F46E5" }}
-                >
-                  {status.count}
-                </p>
-                <span className="text-sm text-gray-500 ml-2">
-                  {summary.total > 0
-                    ? `(${Math.round((status.count / summary.total) * 100)}%)`
-                    : "(0%)"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Monthly Trends */}
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              แนวโน้มรายเดือน
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              เสร็จสิ้น
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={monthlyStats}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="hardware" name="ฮาร์ดแวร์" fill="#0088FE" />
-                  <Bar dataKey="software" name="ซอฟต์แวร์" fill="#00C49F" />
-                  <Bar dataKey="other" name="อื่นๆ" fill="#FFBB28" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="flex items-center">
+              <p className="text-3xl font-bold text-green-600">
+                {resolvedStatus.count}
+              </p>
+              <span className="text-sm text-gray-500 ml-2">
+                {summary.total > 0
+                  ? `(${Math.round(
+                      (resolvedStatus.count / summary.total) * 100
+                    )}%)`
+                  : "(0%)"}
+              </span>
             </div>
           </div>
 
-          {/* Problems by Room */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              อยู่ระหว่างดำเนินการ
+            </h3>
+            <div className="flex items-center">
+              <p className="text-3xl font-bold text-purple-600">
+                {inProgressCount}
+              </p>
+              <span className="text-sm text-gray-500 ml-2">
+                {summary.total > 0
+                  ? `(${Math.round((inProgressCount / summary.total) * 100)}%)`
+                  : "(0%)"}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              ชำรุดเสียหาย
+            </h3>
+            <div className="flex items-center">
+              <p className="text-3xl font-bold text-orange-600">
+                {damagedStatus.count}
+              </p>
+              <span className="text-sm text-gray-500 ml-2">
+                {summary.total > 0
+                  ? `(${Math.round(
+                      (damagedStatus.count / summary.total) * 100
+                    )}%)`
+                  : "(0%)"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Analysis Graphs - Just 2 key graphs */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Graph 1: Monthly Trends by Problem Type */}
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              ปัญหาตามห้อง (30 วันล่าสุด)
+              แนวโน้มปัญหารายเดือน
             </h3>
-            <div className="h-80">
-              {roomStats.length > 0 ? (
+            {loading ? (
+              <div className="flex justify-center items-center h-80">
+                <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
+              </div>
+            ) : (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={monthlyStats}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar
+                      dataKey="hardware"
+                      name="ฮาร์ดแวร์"
+                      fill="#0088FE"
+                      stackId="a"
+                    />
+                    <Bar
+                      dataKey="software"
+                      name="ซอฟต์แวร์"
+                      fill="#00C49F"
+                      stackId="a"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Problem type summary statistics - Changed from grid-cols-3 to grid-cols-2 */}
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="bg-blue-50 p-3 rounded-lg text-center">
+                <div className="flex items-center justify-center mb-1">
+                  <HardDrive className="w-4 h-4 text-blue-600 mr-1" />
+                  <span className="text-sm font-medium text-blue-800">
+                    ฮาร์ดแวร์
+                  </span>
+                </div>
+                <p className="text-xl font-bold text-blue-600">
+                  {totalHardware}
+                </p>
+                <p className="text-xs text-blue-500">
+                  {totalProblems > 0
+                    ? `${Math.round((totalHardware / totalProblems) * 100)}%`
+                    : "0%"}
+                </p>
+              </div>
+
+              <div className="bg-green-50 p-3 rounded-lg text-center">
+                <div className="flex items-center justify-center mb-1">
+                  <Monitor className="w-4 h-4 text-green-600 mr-1" />
+                  <span className="text-sm font-medium text-green-800">
+                    ซอฟต์แวร์
+                  </span>
+                </div>
+                <p className="text-xl font-bold text-green-600">
+                  {totalSoftware}
+                </p>
+                <p className="text-xs text-green-500">
+                  {totalProblems > 0
+                    ? `${Math.round((totalSoftware / totalProblems) * 100)}%`
+                    : "0%"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Graph 2: Problem Distribution by Room and Status */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              การกระจายปัญหาตามสถานะและห้อง
+            </h3>
+
+            {/* Status breakdown chart */}
+            {loading ? (
+              <div className="flex justify-center items-center h-80">
+                <div className="inline-block animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
+              </div>
+            ) : (
+              <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={roomStats}
+                      data={statusSummary}
                       cx="50%"
                       cy="50%"
                       labelLine={true}
                       outerRadius={80}
                       fill="#8884d8"
-                      dataKey="total"
-                      nameKey="room"
-                      label={({ room, total, percent }) =>
-                        `${room}: ${total} (${(percent * 100).toFixed(0)}%)`
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, value, percent }) =>
+                        value > 0
+                          ? `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
+                          : ""
                       }
                     >
-                      {roomStats.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
+                      {statusSummary.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      formatter={(value, name, props) => [
-                        value,
-                        `ห้อง ${props.payload.room}`,
-                      ]}
-                    />
+                    <Tooltip />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Room distribution */}
+            <div className="mt-6">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                ปัญหาตามห้อง (5 อันดับแรก)
+              </h4>
+              {roomStats.length > 0 ? (
+                <div className="space-y-2">
+                  {roomStats.slice(0, 5).map((room, index) => (
+                    <div key={room.room} className="flex items-center">
+                      <span
+                        className="w-3 h-3 rounded-full mr-2"
+                        style={{
+                          backgroundColor: COLORS[index % COLORS.length],
+                        }}
+                      ></span>
+                      <span className="text-sm text-gray-700 mr-2">
+                        {room.room}:
+                      </span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+                        <div
+                          className="h-2.5 rounded-full"
+                          style={{
+                            width: `${Math.round(
+                              (room.total / roomStats[0].total) * 100
+                            )}%`,
+                            backgroundColor: COLORS[index % COLORS.length],
+                          }}
+                        ></div>
+                      </div>
+                      <span className="text-sm text-gray-500 ml-2">
+                        {room.total}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-gray-500">
-                    ไม่มีข้อมูลในช่วง 30 วันที่ผ่านมา
-                  </p>
+                <div className="text-center text-gray-500 py-4">
+                  ไม่พบข้อมูลห้อง
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Problem Status Distribution */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-8">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            การกระจายตามสถานะ
-          </h3>
+        {/* Table for "เสร็จสิ้น" and "ชำรุดเสียหาย" Problems */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800">
+              รายการปัญหาที่เสร็จสิ้นและชำรุด
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              แสดงรายการปัญหาที่มีสถานะ "เสร็จสิ้น" และ "ชำรุดเสียหาย"
+            </p>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ลำดับ
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    วันที่
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    อุปกรณ์
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    รหัสครุภัณฑ์
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ห้อง
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ปัญหา
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ประเภทปัญหา
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-mediumtext-gray-500 uppercase tracking-wider">
+                    ผู้แจ้ง
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ผู้รับผิดชอบ
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     สถานะ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    จำนวน
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ร้อยละ
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {summary.statuses.map((status) => (
-                  <tr key={status.status_id} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <span
-                          className="w-3 h-3 rounded-full mr-2"
-                          style={{ backgroundColor: status.status_color }}
-                        ></span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {status.status_name}
-                        </span>
+                {loading ? (
+                  <tr>
+                    <td colSpan="10" className="px-6 py-4 text-center">
+                      <div className="flex justify-center items-center py-4">
+                        <div className="inline-block animate-spin w-6 h-6 border-4 border-indigo-500 border-t-transparent rounded-full mr-2" />
+                        <span>กำลังโหลดข้อมูล...</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {status.count}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {summary.total > 0
-                        ? `${((status.count / summary.total) * 100).toFixed(
-                            2
-                          )}%`
-                        : "0%"}
+                  </tr>
+                ) : completedProblems.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="10"
+                      className="px-6 py-8 text-center text-gray-500"
+                    >
+                      <div className="flex flex-col items-center justify-center">
+                        <svg
+                          className="w-16 h-16 text-gray-400 mb-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <p className="font-medium">
+                          ไม่พบข้อมูลรายการที่เสร็จสิ้นหรือชำรุด
+                        </p>
+                        <p className="mt-1 text-sm">
+                          ลองปรับตัวกรองหรือค้นหาด้วยคำค้นอื่น
+                        </p>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  completedProblems.map((problem, index) => {
+                    const typeDetails = getProblemTypeDetails(
+                      problem.problem_type
+                    );
+
+                    return (
+                      <tr
+                        key={problem.id}
+                        className="hover:bg-gray-50/50 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {(currentPage - 1) * pageSize + index + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(problem.created_at).toLocaleDateString(
+                            "th-TH"
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {problem.equipment_name || "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {problem.equipment_id || "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {problem.equipment_room || "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {problem.description}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div
+                            className={`inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-xs ${typeDetails.bgColor} ${typeDetails.textColor} border ${typeDetails.borderColor}`}
+                          >
+                            {typeDetails.icon}
+                            <span>{typeDetails.label}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <User className="h-4 w-4 text-gray-400 mr-2" />
+                            <span className="text-sm text-gray-900">
+                              {problem.reporter_name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <User className="h-4 w-4 text-gray-400 mr-2" />
+                            <span className="text-sm text-gray-900">
+                              {problem.assigned_to_name || "-"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
+                            style={{
+                              backgroundColor:
+                                problem.status_id === 3 ? "#ecfdf5" : "#fff7ed", // Green bg for completed, orange bg for damaged
+                              color:
+                                problem.status_id === 3 ? "#065f46" : "#9a3412", // Green text for completed, orange text for damaged
+                              borderWidth: "1px",
+                              borderColor:
+                                problem.status_id === 3 ? "#a7f3d0" : "#fed7aa", // Green border for completed, orange border for damaged
+                            }}
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full mr-1.5"
+                              style={{
+                                backgroundColor:
+                                  problem.status_id === 3
+                                    ? "#10b981"
+                                    : "#f97316", // Green dot for completed, orange dot for damaged
+                              }}
+                            ></span>
+                            {problem.status_name}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination for the table */}
+          {completedProblems.length > 0 && (
+            <div className="p-4 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

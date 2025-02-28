@@ -33,6 +33,7 @@ function ProblemForm({ problem = null, onClose }) {
     isLoading: false,
   });
 
+  // Removed "other" from problem types as requested
   const PROBLEM_TYPES = [
     {
       value: "hardware",
@@ -55,12 +56,6 @@ function ProblemForm({ problem = null, onClose }) {
         "ไวรัสคอมพิวเตอร์",
         "อินเทอร์เน็ตไม่ทำงาน",
       ],
-    },
-    {
-      value: "other",
-      label: "ปัญหาอื่นๆ",
-      icon: "❓",
-      examples: ["ปัญหาที่ไม่เกี่ยวกับฮาร์ดแวร์และซอฟต์แวร์"],
     },
   ];
 
@@ -89,10 +84,14 @@ function ProblemForm({ problem = null, onClose }) {
   // Initialize form data if editing an existing problem
   useEffect(() => {
     if (problem) {
+      // If the problem type is "other", change it to "hardware" since we removed "other"
+      const problem_type =
+        problem.problem_type === "other" ? "hardware" : problem.problem_type;
+
       setFormData({
         equipment_id: problem.equipment_id || "",
         description: problem.description || "",
-        problem_type: problem.problem_type || "hardware",
+        problem_type: problem_type || "hardware",
       });
 
       // If the problem has an image, set the preview URL
@@ -380,7 +379,7 @@ function ProblemForm({ problem = null, onClose }) {
         {/* Problem Type Selection - Primary Focus */}
         <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
           <h3 className="text-lg font-semibold mb-4">เลือกประเภทของปัญหา</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {PROBLEM_TYPES.map((type) => (
               <div
                 key={type.value}
