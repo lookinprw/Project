@@ -262,8 +262,8 @@ function CsvImporter({ onComplete }) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-6">
+    <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold mb-4 sm:mb-6">
         นำเข้าข้อมูลครุภัณฑ์จากไฟล์ CSV
       </h2>
 
@@ -280,7 +280,7 @@ function CsvImporter({ onComplete }) {
 
       {!file ? (
         <div
-          className={`mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 ${
+          className={`mt-1 flex flex-col items-center justify-center px-3 sm:px-6 pt-4 sm:pt-5 pb-4 sm:pb-6 border-2 ${
             isDragging ? "border-indigo-300 bg-indigo-50" : "border-gray-300"
           } border-dashed rounded-md transition-colors duration-200`}
           onDragEnter={handleDragEnter}
@@ -290,11 +290,11 @@ function CsvImporter({ onComplete }) {
         >
           <div className="space-y-1 text-center">
             <Upload
-              className={`mx-auto h-12 w-12 ${
+              className={`mx-auto h-10 w-10 sm:h-12 sm:w-12 ${
                 isDragging ? "text-indigo-500" : "text-gray-400"
               }`}
             />
-            <div className="flex text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row text-xs sm:text-sm text-gray-600">
               <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500">
                 <span>อัพโหลดไฟล์ CSV</span>
                 <input
@@ -307,23 +307,25 @@ function CsvImporter({ onComplete }) {
                   onChange={handleFileChange}
                 />
               </label>
-              <p className="pl-1">หรือลากไฟล์วางที่นี่</p>
+              <p className="sm:pl-1">หรือลากไฟล์วางที่นี่</p>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 mt-1">
               ไฟล์ CSV ต้องมีหัวข้อคอลัมน์: equipment_id, name, type, room,
               status
             </p>
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-between bg-gray-50 p-3 sm:p-4 rounded-lg">
             <div className="flex items-center">
-              <div className="bg-indigo-100 p-2 rounded-md">
-                <CheckCircle className="h-5 w-5 text-indigo-600" />
+              <div className="bg-indigo-100 p-1 sm:p-2 rounded-md">
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">{file.name}</p>
+              <div className="ml-2 sm:ml-3 overflow-hidden">
+                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate max-w-[140px] sm:max-w-full">
+                  {file.name}
+                </p>
                 <p className="text-xs text-gray-500">
                   {csvData.length} รายการ | {(file.size / 1024).toFixed(2)} KB
                 </p>
@@ -342,29 +344,31 @@ function CsvImporter({ onComplete }) {
               }}
               className="text-gray-400 hover:text-gray-500"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
 
           {validationErrors.length > 0 && (
-            <div className="bg-red-50 p-4 rounded-lg">
+            <div className="bg-red-50 p-3 sm:p-4 rounded-lg">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-400" />
                 </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
+                <div className="ml-3 overflow-hidden">
+                  <h3 className="text-xs sm:text-sm font-medium text-red-800">
                     พบข้อผิดพลาด {validationErrors.length} รายการ
                   </h3>
-                  <div className="mt-2 max-h-40 overflow-y-auto text-sm text-red-700">
-                    <ul className="list-disc pl-5 space-y-1">
-                      {validationErrors.slice(0, 10).map((error, index) => (
-                        <li key={index}>
+                  <div className="mt-2 max-h-32 sm:max-h-40 overflow-y-auto text-xs sm:text-sm text-red-700">
+                    <ul className="list-disc pl-4 sm:pl-5 space-y-1">
+                      {validationErrors.slice(0, 5).map((error, index) => (
+                        <li key={index} className="text-xs sm:text-sm">
                           แถวที่ {error.row}: {error.message}
                         </li>
                       ))}
-                      {validationErrors.length > 10 && (
-                        <li>และอีก {validationErrors.length - 10} รายการ</li>
+                      {validationErrors.length > 5 && (
+                        <li className="text-xs sm:text-sm">
+                          และอีก {validationErrors.length - 5} รายการ
+                        </li>
                       )}
                     </ul>
                   </div>
@@ -375,51 +379,55 @@ function CsvImporter({ onComplete }) {
 
           {previewData.length > 0 && (
             <div>
-              <h3 className="text-lg font-medium mb-2">ตัวอย่างข้อมูล</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {Object.keys(previewData[0]).map((header) => (
-                        <th
-                          key={header}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {previewData.map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {Object.values(row).map((value, cellIndex) => (
-                          <td
-                            key={cellIndex}
-                            className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+              <h3 className="text-base sm:text-lg font-medium mb-2">
+                ตัวอย่างข้อมูล
+              </h3>
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <div className="inline-block min-w-full align-middle">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {Object.keys(previewData[0]).map((header) => (
+                          <th
+                            key={header}
+                            className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
-                            {value}
-                          </td>
+                            {header}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {previewData.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {Object.values(row).map((value, cellIndex) => (
+                            <td
+                              key={cellIndex}
+                              className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 max-w-[100px] truncate"
+                            >
+                              {value}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
               {csvData.length > 5 && (
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-xs sm:text-sm text-gray-500 mt-2">
                   และอีก {csvData.length - 5} รายการ
                 </p>
               )}
             </div>
           )}
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 gap-2 sm:gap-0 pt-4">
             <button
               type="button"
               onClick={handleCancel}
               disabled={isProcessing}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-xs sm:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               ยกเลิก
             </button>
@@ -431,7 +439,7 @@ function CsvImporter({ onComplete }) {
                 validationErrors.length > 0 ||
                 csvData.length === 0
               }
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="mb-2 sm:mb-0 px-4 py-2 border border-transparent rounded-md shadow-sm text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {isProcessing ? "กำลังนำเข้าข้อมูล..." : "นำเข้าข้อมูล"}
             </button>
@@ -439,11 +447,11 @@ function CsvImporter({ onComplete }) {
         </div>
       )}
 
-      <div className="mt-8 border-t pt-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">
+      <div className="mt-6 sm:mt-8 border-t pt-4">
+        <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
           คำแนะนำในการเตรียมไฟล์ CSV
         </h3>
-        <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
+        <ul className="list-disc pl-5 text-xs sm:text-sm text-gray-600 space-y-1">
           <li>
             ไฟล์ CSV ต้องมีหัวข้อคอลัมน์: equipment_id, name, type, room, status
           </li>

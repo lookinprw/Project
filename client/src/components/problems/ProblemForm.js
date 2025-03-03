@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Upload, X, Search as SearchIcon } from "lucide-react";
+import {
+  Upload,
+  X,
+  Search as SearchIcon,
+  AlertTriangle,
+  HardDrive,
+  FileCode,
+  Image,
+  Send,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useAlert } from "../../context/AlertContext";
 import api from "../../utils/axios";
@@ -8,6 +17,7 @@ import ConfirmationDialog from "../common/ConfirmationDialog";
 function ProblemForm({ problem = null, onClose }) {
   const { user: currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useAlert();
+  const [isMobile, setIsMobile] = useState(false);
 
   const [formData, setFormData] = useState({
     equipment_id: "",
@@ -33,12 +43,28 @@ function ProblemForm({ problem = null, onClose }) {
     isLoading: false,
   });
 
+  // Check if screen is mobile on component mount and window resize
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Check initially
+    checkIfMobile();
+
+    // Add listener for window resize
+    window.addEventListener("resize", checkIfMobile);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
+
   // Removed "other" from problem types as requested
   const PROBLEM_TYPES = [
     {
       value: "hardware",
       label: "ปัญหาด้านฮาร์ดแวร์",
-      icon: "🔧",
+      icon: <HardDrive className="h-5 w-5 text-indigo-600" />,
       examples: [
         "เครื่องเปิดไม่ติด",
         "หน้าจอไม่แสดงผล",
@@ -49,7 +75,7 @@ function ProblemForm({ problem = null, onClose }) {
     {
       value: "software",
       label: "ปัญหาด้านซอฟแวร์",
-      icon: "💻",
+      icon: <FileCode className="h-5 w-5 text-indigo-600" />,
       examples: [
         "Windows มีปัญหา",
         "โปรแกรมไม่ทำงาน",
@@ -321,47 +347,63 @@ function ProblemForm({ problem = null, onClose }) {
   };
 
   const SimilarProblemsModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
-        <h3 className="text-lg font-semibold mb-4">พบปัญหาที่คล้ายกัน</h3>
-        <div className="space-y-4">
-          {similarProblems.map((problem) => (
-            <div key={problem.id} className="border rounded-lg p-4">
-              <div className="flex justify-between items-start mb-2">
-                <p className="font-medium">{problem.equipment_name}</p>
-                <p className="text-sm text-gray-500">
-                  {new Date(problem.created_at).toLocaleDateString("th-TH")}
-                </p>
-              </div>
-              <p className="text-sm text-gray-600 mb-2">
-                {problem.description}
-              </p>
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-500">
-                  แจ้งโดย: {problem.firstname} {problem.lastname}
-                </p>
-                <span
-                  className="px-2 py-1 text-xs rounded-full"
-                  style={{ backgroundColor: problem.status_color }}
-                >
-                  {problem.status_name}
-                </span>
-              </div>
-            </div>
-          ))}
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 sm:p-6 max-w-2xl w-full">
+        <div className="flex items-center mb-4">
+          <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
+          <h3 className="text-base sm:text-lg font-semibold">
+            พบปัญหาที่คล้ายกัน
+          </h3>
         </div>
-        <div className="flex justify-end space-x-3 mt-4">
-          <button
-            onClick={() => setShowSimilarProblems(false)}
-            className="px-4 py-2 text-gray-700 border rounded-md"
-          >
-            ยกเลิก
-          </button>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          <div className="space-y-3 sm:space-y-4">
+            {similarProblems.map((problem) => (
+              <div
+                key={problem.id}
+                className="border rounded-lg p-3 sm:p-4 hover:bg-gray-50"
+              >
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 mb-2">
+                  <p className="font-medium text-sm sm:text-base">
+                    {problem.equipment_name}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    {new Date(problem.created_at).toLocaleDateString("th-TH")}
+                  </p>
+                </div>
+                <p className="text-xs sm:text-sm text-gray-600 mb-2">
+                  {problem.description}
+                </p>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    แจ้งโดย: {problem.firstname} {problem.lastname}
+                  </p>
+                  <span
+                    className="px-2 py-0.5 text-xs rounded-full self-start sm:self-auto"
+                    style={{ backgroundColor: problem.status_color }}
+                  >
+                    {problem.status_name}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row-reverse sm:justify-start gap-2 sm:gap-3 mt-4">
           <button
             onClick={submitProblem}
-            className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+            className="px-4 py-2 text-xs sm:text-sm text-white bg-indigo-600 rounded-md hover:bg-indigo-700 flex items-center justify-center"
           >
+            <Send className="h-4 w-4 mr-1" />
             แจ้งปัญหาใหม่
+          </button>
+          <button
+            onClick={() => setShowSimilarProblems(false)}
+            className="px-4 py-2 text-xs sm:text-sm text-gray-700 border rounded-md hover:bg-gray-50 flex items-center justify-center"
+          >
+            <X className="h-4 w-4 mr-1" />
+            ยกเลิก
           </button>
         </div>
       </div>
@@ -369,24 +411,36 @@ function ProblemForm({ problem = null, onClose }) {
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
       {showSimilarProblems && <SimilarProblemsModal />}
-      <h2 className="text-xl font-bold mb-6">
-        {problem ? "แก้ไขรายการแจ้งปัญหา" : "แจ้งปัญหาครุภัณฑ์"}
-      </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-800 text-white">
+        <h2 className="text-lg sm:text-xl font-bold flex items-center">
+          <AlertTriangle className="h-5 w-5 mr-2" />
+          {problem ? "แก้ไขรายการแจ้งปัญหา" : "แจ้งปัญหาครุภัณฑ์"}
+        </h2>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="p-4 sm:p-6 space-y-4 sm:space-y-6"
+      >
         {/* Problem Type Selection - Primary Focus */}
-        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4">เลือกประเภทของปัญหา</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gray-50 p-4 sm:p-6 rounded-lg sm:rounded-xl border border-gray-200">
+          <h3 className="text-base sm:text-lg font-semibold mb-4 flex items-center">
+            <span className="mr-2">เลือกประเภทของปัญหา</span>
+            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+              จำเป็น
+            </span>
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {PROBLEM_TYPES.map((type) => (
               <div
                 key={type.value}
                 onClick={() =>
                   setFormData({ ...formData, problem_type: type.value })
                 }
-                className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200
+                className={`p-3 sm:p-4 rounded-lg border-2 cursor-pointer transition-all duration-200
                   ${
                     formData.problem_type === type.value
                       ? "border-indigo-500 bg-indigo-50"
@@ -394,10 +448,12 @@ function ProblemForm({ problem = null, onClose }) {
                   }`}
               >
                 <div className="flex items-center space-x-2">
-                  <span className="text-2xl">{type.icon}</span>
-                  <span className="font-medium">{type.label}</span>
+                  {type.icon}
+                  <span className="font-medium text-sm sm:text-base">
+                    {type.label}
+                  </span>
                 </div>
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-xs sm:text-sm text-gray-600">
                   <ul className="list-disc list-inside space-y-1">
                     {type.examples.map((example, index) => (
                       <li key={index}>{example}</li>
@@ -410,35 +466,38 @@ function ProblemForm({ problem = null, onClose }) {
         </div>
 
         {/* Equipment Selection */}
-        <div className="border-t pt-6">
+        <div className="border-t pt-4 sm:pt-6">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               ค้นหาครุภัณฑ์
             </label>
             <div className="relative">
               <SearchIcon
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={20}
+                size={18}
               />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาด้วยรหัส, ชื่อ หรือห้อง..."
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              เลือกครุภัณฑ์
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2 flex items-center">
+              <span className="mr-2">เลือกครุภัณฑ์</span>
+              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                จำเป็น
+              </span>
             </label>
             <select
               name="equipment_id"
               value={formData.equipment_id}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               required
               disabled={problem} // Disable if editing existing problem
             >
@@ -452,34 +511,41 @@ function ProblemForm({ problem = null, onClose }) {
           </div>
         </div>
 
-        {/* Description - Optional */}
+        {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            รายละเอียดเพิ่มเติม
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2 flex items-center">
+            <span className="mr-2">รายละเอียดเพิ่มเติม</span>
+            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+              จำเป็น
+            </span>
           </label>
           <textarea
             name="description"
             value={formData.description}
             onChange={handleChange}
-            rows="3"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            rows={isMobile ? "4" : "3"}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="อธิบายรายละเอียดเพิ่มเติมเกี่ยวกับปัญหาที่พบ..."
           />
+          <p className="mt-1 text-xs text-gray-500">
+            กรุณาระบุรายละเอียดปัญหาที่พบอย่างน้อย 5 ตัวอักษร
+          </p>
         </div>
 
         {/* Image Upload */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2 flex items-center">
+            <Image className="h-4 w-4 mr-1" />
             แนบรูปภาพ (ถ้ามี)
           </label>
-          <div className="mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+          <div className="mt-1 flex flex-col items-center justify-center px-4 sm:px-6 pt-4 sm:pt-5 pb-4 sm:pb-6 border-2 border-gray-300 border-dashed rounded-md">
             <div className="flex flex-col items-center text-center">
               {previewUrl ? (
                 <div className="relative">
                   <img
                     src={previewUrl}
                     alt="Preview"
-                    className="mx-auto h-32 w-auto rounded-lg"
+                    className="mx-auto h-24 sm:h-32 w-auto rounded-lg"
                   />
                   <button
                     type="button"
@@ -491,10 +557,10 @@ function ProblemForm({ problem = null, onClose }) {
                 </div>
               ) : (
                 <>
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-                  <div className="flex flex-col items-center space-y-2">
+                  <Upload className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-2 sm:mb-3" />
+                  <div className="flex flex-col items-center space-y-1 sm:space-y-2">
                     <label className="relative cursor-pointer rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                      <span>อัพโหลดรูปภาพ</span>
+                      <span className="text-xs sm:text-sm">อัพโหลดรูปภาพ</span>
                       <input
                         type="file"
                         className="sr-only"
@@ -511,24 +577,29 @@ function ProblemForm({ problem = null, onClose }) {
             </div>
           </div>
           {imageError && (
-            <p className="mt-2 text-sm text-red-600">{imageError}</p>
+            <p className="mt-2 text-xs text-red-600 flex items-center">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              {imageError}
+            </p>
           )}
         </div>
 
         {/* Submit Buttons */}
-        <div className="flex justify-end space-x-3 pt-6">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 pt-4 sm:pt-6 gap-2 sm:gap-0 border-t">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            className="px-4 py-2 text-xs sm:text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 flex items-center justify-center"
           >
+            <X className="h-4 w-4 mr-1" />
             ยกเลิก
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            className="px-4 py-2 text-xs sm:text-sm text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center"
           >
+            <Send className="h-4 w-4 mr-1" />
             {isSubmitting
               ? "กำลังส่งข้อมูล..."
               : problem

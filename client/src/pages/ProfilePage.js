@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
 import { User, Eye, EyeOff } from "lucide-react";
@@ -12,6 +12,7 @@ function ProfilePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [formData, setFormData] = useState({
     firstname: user?.firstname || "",
@@ -24,6 +25,16 @@ function ProfilePage() {
     newPassword: "",
     confirmPassword: "",
   });
+
+  // Handle window resize for responsive design
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const handleProfileUpdate = async () => {
     setLoading(true);
@@ -114,18 +125,18 @@ function ProfilePage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <div className="p-3 sm:p-6">
+        <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6">
           {/* Profile Card */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
-            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-800 text-white rounded-t-2xl">
-              <h1 className="text-2xl font-bold">ข้อมูลโปรไฟล์</h1>
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg border border-gray-100">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-indigo-600 to-indigo-800 text-white rounded-t-xl sm:rounded-t-2xl">
+              <h1 className="text-lg sm:text-2xl font-bold">ข้อมูลโปรไฟล์</h1>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {(error || success) && (
                 <div
-                  className={`p-4 rounded-lg ${
+                  className={`p-3 sm:p-4 rounded-lg text-sm ${
                     error
                       ? "bg-red-100 text-red-700"
                       : "bg-green-100 text-green-700"
@@ -135,16 +146,16 @@ function ProfilePage() {
                 </div>
               )}
 
-              <div className="flex items-center">
-                <div className="bg-indigo-100 p-4 rounded-full">
-                  <User className="h-8 w-8 text-indigo-600" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-0">
+                <div className="bg-indigo-100 p-3 sm:p-4 rounded-full w-16 h-16 sm:w-auto sm:h-auto flex items-center justify-center">
+                  <User className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
                 </div>
-                <div className="ml-4">
-                  <h2 className="text-2xl font-semibold">
+                <div className="sm:ml-4">
+                  <h2 className="text-xl sm:text-2xl font-semibold">
                     {!isEditing ? (
                       `${user?.firstname} ${user?.lastname}`
                     ) : (
-                      <div className="flex space-x-4">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:space-x-4">
                         <input
                           type="text"
                           value={formData.firstname}
@@ -154,7 +165,7 @@ function ProfilePage() {
                               firstname: e.target.value,
                             })
                           }
-                          className="border rounded px-2 py-1 w-32"
+                          className="border rounded px-2 py-1 w-full sm:w-32"
                           placeholder="ชื่อ"
                         />
                         <input
@@ -166,23 +177,25 @@ function ProfilePage() {
                               lastname: e.target.value,
                             })
                           }
-                          className="border rounded px-2 py-1 w-32"
+                          className="border rounded px-2 py-1 w-full sm:w-32"
                           placeholder="นามสกุล"
                         />
                       </div>
                     )}
                   </h2>
-                  <p className="text-gray-600">ชื่อผู้ใช้: {user?.username}</p>
+                  <p className="text-gray-600 text-sm sm:text-base">
+                    ชื่อผู้ใช้: {user?.username}
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 bg-gray-50 rounded-xl p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1 sm:mb-2">
                     สาขา
                   </h3>
                   {!isEditing ? (
-                    <p className="text-gray-900 font-medium">
+                    <p className="text-sm sm:text-base text-gray-900 font-medium">
                       {user?.branch === "ITD"
                         ? "เทคโนโลยีสารสนเทศและนวัตกรรมดิจิทัล"
                         : "นวัตกรรมสารสนเทศทางการแพทย์"}
@@ -193,7 +206,7 @@ function ProfilePage() {
                       onChange={(e) =>
                         setFormData({ ...formData, branch: e.target.value })
                       }
-                      className="border rounded px-2 py-1 w-full"
+                      className="border rounded px-2 py-1 w-full text-sm sm:text-base"
                     >
                       <option value="ITD">
                         เทคโนโลยีสารสนเทศและนวัตกรรมดิจิทัล
@@ -203,11 +216,11 @@ function ProfilePage() {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1 sm:mb-2">
                     บทบาท
                   </h3>
                   <div
-                    className={`inline-flex px-3 py-1 rounded-full text-sm font-medium
+                    className={`inline-flex px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium
                     ${
                       user?.role === "admin"
                         ? "bg-red-100 text-red-800"
@@ -229,11 +242,11 @@ function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end sm:space-x-4">
                 {!showPasswordForm && (
                   <button
                     onClick={() => setShowPasswordForm(true)}
-                    className="px-4 py-2 text-indigo-600 hover:text-indigo-700 font-medium"
+                    className="w-full sm:w-auto px-4 py-2 text-indigo-600 hover:text-indigo-700 font-medium text-center sm:text-left text-sm sm:text-base"
                   >
                     เปลี่ยนรหัสผ่าน
                   </button>
@@ -247,7 +260,7 @@ function ProfilePage() {
                     }
                   }}
                   disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm sm:text-base"
                 >
                   {loading
                     ? "กำลังบันทึก..."
@@ -265,7 +278,7 @@ function ProfilePage() {
                         branch: user?.branch || "",
                       });
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm sm:text-base"
                   >
                     ยกเลิก
                   </button>
@@ -276,11 +289,13 @@ function ProfilePage() {
 
           {/* Password Change Form */}
           {showPasswordForm && (
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-              <h2 className="text-xl font-semibold mb-6">เปลี่ยนรหัสผ่าน</h2>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg border border-gray-100 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold mb-4 sm:mb-6">
+                เปลี่ยนรหัสผ่าน
+              </h2>
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     รหัสผ่านปัจจุบัน
                   </label>
                   <div className="relative">
@@ -293,7 +308,7 @@ function ProfilePage() {
                           currentPassword: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm sm:text-base"
                       required
                     />
                     <button
@@ -301,12 +316,16 @@ function ProfilePage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2"
                     >
-                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      {showPassword ? (
+                        <EyeOff size={isMobile ? 18 : 20} />
+                      ) : (
+                        <Eye size={isMobile ? 18 : 20} />
+                      )}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     รหัสผ่านใหม่
                   </label>
                   <input
@@ -318,12 +337,12 @@ function ProfilePage() {
                         newPassword: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm sm:text-base"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     ยืนยันรหัสผ่านใหม่
                   </label>
                   <input
@@ -335,11 +354,11 @@ function ProfilePage() {
                         confirmPassword: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm sm:text-base"
                     required
                   />
                 </div>
-                <div className="flex justify-end space-x-4 pt-4">
+                <div className="flex flex-col sm:flex-row sm:justify-end gap-2 sm:space-x-4 pt-4">
                   <button
                     type="button"
                     onClick={() => {
@@ -350,14 +369,14 @@ function ProfilePage() {
                         confirmPassword: "",
                       });
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm sm:text-base"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm sm:text-base"
                   >
                     {loading ? "กำลังบันทึก..." : "เปลี่ยนรหัสผ่าน"}
                   </button>

@@ -197,15 +197,15 @@ function EquipmentForm({ equipment = null, onComplete }) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-lg font-semibold mb-6">
+    <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold mb-4 sm:mb-6">
         {equipment ? "แก้ไขครุภัณฑ์" : "เพิ่มครุภัณฑ์ใหม่"}
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700">
               รหัสครุภัณฑ์
             </label>
             <input
@@ -217,17 +217,17 @@ function EquipmentForm({ equipment = null, onComplete }) {
                 validationErrors.equipment_id
                   ? "border-red-500"
                   : "border-gray-300"
-              } px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500`}
+              } px-3 py-2 text-xs sm:text-sm focus:ring-indigo-500 focus:border-indigo-500`}
             />
             {validationErrors.equipment_id && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-xs text-red-600">
                 {validationErrors.equipment_id}
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700">
               ชื่อครุภัณฑ์
             </label>
             <input
@@ -237,17 +237,17 @@ function EquipmentForm({ equipment = null, onComplete }) {
               onChange={handleChange}
               className={`mt-1 block w-full rounded-md border ${
                 validationErrors.name ? "border-red-500" : "border-gray-300"
-              } px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500`}
+              } px-3 py-2 text-xs sm:text-sm focus:ring-indigo-500 focus:border-indigo-500`}
             />
             {validationErrors.name && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-xs text-red-600">
                 {validationErrors.name}
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               ประเภท
             </label>
             <div className="flex space-x-4">
@@ -259,7 +259,7 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   onChange={() => handleRadioChange("type", "Computer")}
                   className="form-radio text-indigo-600 h-4 w-4"
                 />
-                <span className="ml-2">Computer</span>
+                <span className="ml-2 text-xs sm:text-sm">Computer</span>
               </label>
               <label className="inline-flex items-center">
                 <input
@@ -269,18 +269,18 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   onChange={() => handleRadioChange("type", "Other")}
                   className="form-radio text-indigo-600 h-4 w-4"
                 />
-                <span className="ml-2">Other</span>
+                <span className="ml-2 text-xs sm:text-sm">Other</span>
               </label>
             </div>
             {validationErrors.type && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-xs text-red-600">
                 {validationErrors.type}
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               ห้อง
             </label>
             <div className="flex space-x-4">
@@ -292,7 +292,7 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   onChange={() => handleRadioChange("room", "BI Studio")}
                   className="form-radio text-indigo-600 h-4 w-4"
                 />
-                <span className="ml-2">BI Studio</span>
+                <span className="ml-2 text-xs sm:text-sm">BI Studio</span>
               </label>
               <label className="inline-flex items-center">
                 <input
@@ -300,20 +300,20 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   name="room"
                   checked={formData.room === "Co-Working"}
                   onChange={() => handleRadioChange("room", "Co-Working")}
-                  className="form-radio text-indigo-600 h-4 w-4"
+                  cclassName="form-radio text-indigo-600 h-4 w-4"
                 />
-                <span className="ml-2">Co-Working</span>
+                <span className="ml-2 text-xs sm:text-sm">Co-Working</span>
               </label>
             </div>
             {validationErrors.room && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-xs text-red-600">
                 {validationErrors.room}
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               สถานะ
             </label>
             <div className="flex flex-col space-y-2">
@@ -325,7 +325,7 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   onChange={() => handleRadioChange("status", "active")}
                   className="form-radio text-green-600 h-4 w-4"
                 />
-                <span className="ml-2">ใช้งานได้</span>
+                <span className="ml-2 text-xs sm:text-sm">ใช้งานได้</span>
               </label>
               <label className="inline-flex items-center">
                 <input
@@ -335,7 +335,7 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   onChange={() => handleRadioChange("status", "inactive")}
                   className="form-radio text-red-600 h-4 w-4"
                 />
-                <span className="ml-2">ไม่พร้อมใช้งาน</span>
+                <span className="ml-2 text-xs sm:text-sm">ไม่พร้อมใช้งาน</span>
               </label>
               <label
                 className={`inline-flex items-center ${
@@ -350,34 +350,34 @@ function EquipmentForm({ equipment = null, onComplete }) {
                   className="form-radio text-yellow-600 h-4 w-4"
                   disabled={!equipment} // Disable if this is a new equipment
                 />
-                <span className="ml-2">ซ่อมบำรุง</span>
+                <span className="ml-2 text-xs sm:text-sm">ซ่อมบำรุง</span>
                 {!equipment && (
-                  <span className="ml-2 text-xs text-gray-500">
+                  <span className="ml-2 text-xs text-gray-500 block mt-1 sm:inline sm:mt-0">
                     (จะถูกตั้งโดยอัตโนมัติเมื่อมีการรายงานปัญหา)
                   </span>
                 )}
               </label>
             </div>
             {validationErrors.status && (
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 text-xs text-red-600">
                 {validationErrors.status}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end space-x-3 mt-6">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 gap-2 sm:gap-0 mt-4 sm:mt-6">
           <button
             type="button"
             onClick={() => onComplete()}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="px-4 py-2 border border-gray-300 rounded-md text-xs sm:text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             ยกเลิก
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mb-2 sm:mb-0 px-4 py-2 bg-indigo-600 text-white rounded-md text-xs sm:text-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
               ? "กำลังบันทึก..."

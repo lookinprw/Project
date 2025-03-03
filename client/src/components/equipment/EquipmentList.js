@@ -6,6 +6,9 @@ import {
   Search as SearchIcon,
   Filter,
   CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Info,
 } from "lucide-react";
 import api from "../../utils/axios";
 import { useAuth } from "../../context/AuthContext";
@@ -13,7 +16,7 @@ import { useAlert } from "../../context/AlertContext";
 import Pagination from "../common/Pagination";
 import ConfirmationDialog from "../common/ConfirmationDialog";
 
-function EquipmentList({ onEdit }) {
+function EquipmentList({ onEdit, isMobile }) {
   const { user } = useAuth();
   const { showSuccess, showError } = useAlert();
   const isEquipmentManager = user?.role === "equipment_manager";
@@ -21,6 +24,8 @@ function EquipmentList({ onEdit }) {
   // State for equipment data and UI
   const [equipment, setEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState([]);
 
   // Selection state for bulk operations
   const [selectedEquipment, setSelectedEquipment] = useState([]);
@@ -98,6 +103,7 @@ function EquipmentList({ onEdit }) {
         // Reset selections when equipment changes
         setSelectedEquipment([]);
         setSelectAll(false);
+        setExpandedItems([]);
       }
     } catch (error) {
       console.error("Error fetching equipment:", error);
@@ -125,6 +131,13 @@ function EquipmentList({ onEdit }) {
   // Handle edit click
   const handleEditClick = (item) => {
     onEdit(item);
+  };
+
+  // Toggle expanded item for mobile view
+  const toggleExpandItem = (id) => {
+    setExpandedItems((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
   };
 
   // Delete equipment with confirmation
@@ -265,6 +278,81 @@ function EquipmentList({ onEdit }) {
     }
   };
 
+  // Render mobile card for each equipment item
+  const renderMobileCard = (item) => {
+    const isExpanded = expandedItems.includes(item.id);
+
+    return (
+      <div
+        key={item.id}
+        className="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-100"
+      >
+        <div className="flex justify-between items-start">
+          <div className="flex items-start space-x-2">
+            {isEquipmentManager && (
+              <input
+                type="checkbox"
+                checked={selectedEquipment.includes(item.id)}
+                onChange={() => handleSelectEquipment(item.id)}
+                className="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+            )}
+            <div>
+              <div className="font-medium text-gray-900">{item.name}</div>
+              <div className="text-sm text-gray-500">{item.equipment_id}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span
+              className={`inline-flex px-2 py-1 text-xs font-medium rounded-md ${getStatusBadgeColor(
+                item.status
+              )}`}
+            >
+              {getStatusText(item.status)}
+            </span>
+            <button
+              onClick={() => toggleExpandItem(item.id)}
+              className="p-1 text-gray-500 hover:text-gray-700 focus:outline-none"
+            >
+              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </button>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div>
+                <div className="text-xs text-gray-500">ประเภท</div>
+                <div className="text-sm">{item.type}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">ห้อง</div>
+                <div className="text-sm">{item.room}</div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 mt-2">
+              <button
+                onClick={() => handleEditClick(item)}
+                className="p-1.5 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+              >
+                <Edit size={16} />
+              </button>
+              <button
+                onClick={() => handleDeleteClick(item.id, item.name)}
+                className="p-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (loading && equipment.length === 0) {
     return (
       <div className="text-center py-8">
@@ -275,32 +363,34 @@ function EquipmentList({ onEdit }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md">
-      <div className="p-6">
+    <div
+      className={`bg-white rounded-lg ${isMobile ? "shadow-sm" : "shadow-md"}`}
+    >
+      <div className={`${isMobile ? "p-4" : "p-6"}`}>
         {/* Search Section */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <div className="max-w-md">
             <label
               htmlFor="search"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-xs sm:text-sm font-medium text-gray-700 mb-1"
             >
               ค้นหาครุภัณฑ์
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <SearchIcon className="h-5 w-5 text-gray-400" />
+                <SearchIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
               </div>
               <input
                 type="text"
                 id="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ค้นหาด้วยรหัส, ชื่อ, ประเภท, ห้อง หรือสถานะ..."
+                placeholder="ค้นหาด้วยรหัส, ชื่อ, ประเภท..."
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white 
-                          placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm"
               />
             </div>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-xs text-gray-500">
               พบ {equipment.length} รายการจากทั้งหมด
               {debouncedSearch && ` จากการค้นหา "${debouncedSearch}"`}
             </p>
@@ -309,11 +399,38 @@ function EquipmentList({ onEdit }) {
 
         {/* Filters Section (for equipment managers) */}
         {isEquipmentManager && (
-          <div className="bg-white p-4 rounded-lg shadow mb-6">
-            <div className="flex flex-wrap gap-4 mb-4">
+          <div
+            className={`bg-white p-3 sm:p-4 rounded-lg shadow-sm mb-4 sm:mb-6 border border-gray-100`}
+          >
+            <div
+              className="flex justify-between items-center cursor-pointer"
+              onClick={() => isMobile && setFiltersOpen(!filtersOpen)}
+            >
+              <div className="flex items-center gap-1 sm:gap-2">
+                <Filter className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm sm:text-base font-medium">ตัวกรอง</h3>
+              </div>
+              {isMobile && (
+                <button className="text-gray-500 p-1">
+                  {filtersOpen ? (
+                    <ChevronUp size={18} />
+                  ) : (
+                    <ChevronDown size={18} />
+                  )}
+                </button>
+              )}
+            </div>
+
+            <div
+              className={`${
+                isMobile && !filtersOpen ? "hidden" : "block"
+              } mt-3 space-y-3 sm:space-y-4`}
+            >
               <div>
-                <label className="block text-sm font-medium mb-1">สถานะ</label>
-                <div className="space-x-2">
+                <label className="block text-xs sm:text-sm font-medium mb-1">
+                  สถานะ
+                </label>
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:space-x-2">
                   {[
                     { value: "active", label: "ใช้งานได้" },
                     { value: "maintenance", label: "ซ่อมบำรุง" },
@@ -336,15 +453,19 @@ function EquipmentList({ onEdit }) {
                         }}
                         className="rounded border-gray-300 text-indigo-600"
                       />
-                      <span className="ml-2 text-sm">{status.label}</span>
+                      <span className="ml-2 text-xs sm:text-sm">
+                        {status.label}
+                      </span>
                     </label>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">ประเภท</label>
-                <div className="space-x-2">
+                <label className="block text-xs sm:text-sm font-medium mb-1">
+                  ประเภท
+                </label>
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:space-x-2">
                   {[
                     { value: "Computer", label: "Computer" },
                     { value: "Other", label: "Other" },
@@ -366,7 +487,9 @@ function EquipmentList({ onEdit }) {
                         }}
                         className="rounded border-gray-300 text-indigo-600"
                       />
-                      <span className="ml-2 text-sm">{type.label}</span>
+                      <span className="ml-2 text-xs sm:text-sm">
+                        {type.label}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -378,131 +501,155 @@ function EquipmentList({ onEdit }) {
         {/* Bulk Actions Bar */}
         {selectedEquipment.length > 0 && isEquipmentManager && (
           <div className="mb-4 bg-indigo-50 p-3 rounded-lg shadow-sm border border-indigo-100 flex justify-between items-center">
-            <span className="text-sm font-medium text-indigo-800">
+            <span className="text-xs sm:text-sm font-medium text-indigo-800">
               เลือก {selectedEquipment.length} รายการ
             </span>
             <button
               onClick={handleBulkDelete}
-              className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center"
+              className="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-600 text-white text-xs sm:text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
-              ลบรายการที่เลือก
+              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              <span className="hidden sm:inline">ลบรายการที่เลือก</span>
+              <span className="sm:hidden">ลบ</span>
             </button>
           </div>
         )}
 
-        {/* Equipment Table */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {/* Add checkbox column for all users */}
-                {isEquipmentManager && (
-                  <th className="w-10 px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectAll && equipment.length > 0}
-                      onChange={handleSelectAll}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      title="เลือกทั้งหมด"
-                    />
-                  </th>
-                )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  รหัสครุภัณฑ์
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ชื่อครุภัณฑ์
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ประเภท
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ห้อง
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  สถานะ
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  จัดการ
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {equipment.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  {/* Add checkbox for each row */}
+        {/* Mobile Card View */}
+        {isMobile && (
+          <div className="space-y-1">
+            {equipment.length > 0 ? (
+              equipment.map((item) => renderMobileCard(item))
+            ) : (
+              <div className="text-center py-8 bg-white rounded-lg shadow-sm">
+                <Info className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">
+                  {debouncedSearch ||
+                  filters.status.length > 0 ||
+                  filters.type.length > 0
+                    ? "ไม่พบรายการที่ตรงกับการค้นหาหรือตัวกรอง"
+                    : "ไม่พบรายการครุภัณฑ์"}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Desktop Table View */}
+        {!isMobile && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {/* Add checkbox column for all users */}
                   {isEquipmentManager && (
-                    <td className="px-3 py-4">
+                    <th className="w-10 px-3 py-3">
                       <input
                         type="checkbox"
-                        checked={selectedEquipment.includes(item.id)}
-                        onChange={() => handleSelectEquipment(item.id)}
+                        checked={selectAll && equipment.length > 0}
+                        onChange={handleSelectAll}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        title="เลือกทั้งหมด"
                       />
-                    </td>
+                    </th>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {item.equipment_id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {item.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {item.type}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {item.room}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-3 py-1 text-sm font-medium rounded-md ${getStatusBadgeColor(
-                        item.status
-                      )}`}
-                    >
-                      {getStatusText(item.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                    <button
-                      onClick={() => handleEditClick(item)}
-                      className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                      title="แก้ไข"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(item.id, item.name)}
-                      className="text-red-600 hover:text-red-900 transition-colors"
-                      title="ลบ"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    รหัสครุภัณฑ์
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ชื่อครุภัณฑ์
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ประเภท
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ห้อง
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    สถานะ
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    จัดการ
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {equipment.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    {/* Add checkbox for each row */}
+                    {isEquipmentManager && (
+                      <td className="px-3 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedEquipment.includes(item.id)}
+                          onChange={() => handleSelectEquipment(item.id)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
+                    )}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {item.equipment_id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {item.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {item.type}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {item.room}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-3 py-1 text-sm font-medium rounded-md ${getStatusBadgeColor(
+                          item.status
+                        )}`}
+                      >
+                        {getStatusText(item.status)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
+                      <button
+                        onClick={() => handleEditClick(item)}
+                        className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                        title="แก้ไข"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(item.id, item.name)}
+                        className="text-red-600 hover:text-red-900 transition-colors"
+                        title="ลบ"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          {equipment.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-gray-500">
-                {debouncedSearch ||
-                filters.status.length > 0 ||
-                filters.type.length > 0
-                  ? "ไม่พบรายการที่ตรงกับการค้นหาหรือตัวกรอง"
-                  : "ไม่พบรายการครุภัณฑ์"}
-              </p>
-            </div>
-          )}
-        </div>
+            {equipment.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-500">
+                  {debouncedSearch ||
+                  filters.status.length > 0 ||
+                  filters.type.length > 0
+                    ? "ไม่พบรายการที่ตรงกับการค้นหาหรือตัวกรอง"
+                    : "ไม่พบรายการครุภัณฑ์"}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Pagination */}
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={handlePageChange}
-          className="mt-6"
+          className="mt-4 sm:mt-6"
+          isMobile={isMobile}
         />
       </div>
 

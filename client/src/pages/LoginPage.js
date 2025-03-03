@@ -10,6 +10,7 @@ function LoginPage() {
   const location = useLocation();
   const { login } = useAuth();
   const { showSuccess, showError } = useAlert();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -18,6 +19,16 @@ function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Handle window resize for responsive design
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Check for redirect messages
   useEffect(() => {
@@ -99,20 +110,24 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-indigo-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <img
             src={Logo}
             alt="Logo"
-            className="h-32 w-auto sm:h-40 md:h-48 lg:h-56 object-contain hover:scale-105 transition-transform duration-300"
+            className="h-24 w-auto sm:h-32 md:h-40 lg:h-48 object-contain hover:scale-105 transition-transform duration-300"
           />
         </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
-        <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-lg sm:px-10 border border-gray-100">
-          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-6 sm:py-8 px-4 shadow-xl sm:shadow-2xl sm:rounded-lg sm:px-10 border border-gray-100">
+          <form
+            className="space-y-4 sm:space-y-6"
+            onSubmit={handleSubmit}
+            noValidate
+          >
             <div>
               <label
                 htmlFor="username"
@@ -122,7 +137,7 @@ function LoginPage() {
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
+                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                 </div>
                 <input
                   id="username"
@@ -131,14 +146,14 @@ function LoginPage() {
                   required
                   value={formData.username}
                   onChange={handleChange}
-                  className={`block w-full pl-10 pr-3 py-2 border ${
+                  className={`block w-full pl-9 sm:pl-10 pr-3 py-2 border ${
                     fieldErrors.username ? "border-red-500" : "border-gray-300"
-                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200`}
+                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200 text-sm`}
                   placeholder="กรอกรหัสผู้ใช้"
                 />
               </div>
               {fieldErrors.username && (
-                <p className="mt-1 text-sm text-red-600">
+                <p className="mt-1 text-xs sm:text-sm text-red-600">
                   {fieldErrors.username}
                 </p>
               )}
@@ -153,7 +168,7 @@ function LoginPage() {
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                  <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                 </div>
                 <input
                   id="password"
@@ -162,9 +177,9 @@ function LoginPage() {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className={`block w-full pl-10 pr-10 py-2 border ${
+                  className={`block w-full pl-9 sm:pl-10 pr-10 py-2 border ${
                     fieldErrors.password ? "border-red-500" : "border-gray-300"
-                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200`}
+                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200 text-sm`}
                   placeholder="กรอกรหัสผ่าน"
                 />
                 <button
@@ -173,14 +188,14 @@ function LoginPage() {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    <EyeOff className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 hover:text-gray-600" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 hover:text-gray-600" />
                   )}
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="mt-1 text-sm text-red-600">
+                <p className="mt-1 text-xs sm:text-sm text-red-600">
                   {fieldErrors.password}
                 </p>
               )}
@@ -189,12 +204,12 @@ function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all duration-200 transform hover:scale-[1.02]"
+              className="w-full flex justify-center py-2 sm:py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all duration-200 transform hover:scale-[1.02]"
             >
               {isLoading ? (
                 <div className="flex items-center">
                   <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    className="animate-spin -ml-1 mr-3 h-4 w-4 sm:h-5 sm:w-5 text-white"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -221,10 +236,10 @@ function LoginPage() {
             </button>
 
             <div className="flex items-center justify-between">
-              <div className="text-sm">
+              <div className="text-xs sm:text-sm">
                 <span className="text-gray-500">ยังไม่มีบัญชี?</span>
               </div>
-              <div className="text-sm">
+              <div className="text-xs sm:text-sm">
                 <Link
                   to="/register"
                   className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
@@ -235,11 +250,11 @@ function LoginPage() {
             </div>
           </form>
 
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
+          <div className="mt-6 sm:mt-8 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
               หากลืมรหัสผ่าน
             </h3>
-            <div className="space-y-1 text-sm text-gray-600">
+            <div className="space-y-1 text-xs sm:text-sm text-gray-600">
               <p>โปรดติดต่อ นักวิชาการสาขาเทคโนโลยีสารสนเทศ</p>
             </div>
           </div>
