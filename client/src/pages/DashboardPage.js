@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   Search,
+  AlertCircle,
   Menu,
 } from "lucide-react";
 import api from "../utils/axios";
@@ -151,6 +152,51 @@ function DashboardPage() {
 
   const handleStatusChange = async (problemId, newStatusId) => {
     try {
+      // For "ไม่สามารถแก้ไขได้" (Cannot Fix) status - ID 4
+      if (newStatusId === 4) {
+        setConfirmDialog({
+          isOpen: true,
+          title: "ระบุเหตุผลที่ไม่สามารถแก้ไขได้",
+          message: "กรุณาระบุเหตุผลที่ไม่สามารถแก้ไขปัญหานี้ได้",
+          confirmText: "บันทึก",
+          cancelText: "ยกเลิก",
+          confirmButtonClass: "bg-indigo-600 hover:bg-indigo-700",
+          showCommentField: true,
+          icon: <AlertCircle className="h-6 w-6 text-indigo-600" />,
+          confirmAction: async (commentText) => {
+            try {
+              // Validate comment is not empty
+              if (!commentText || commentText.trim() === "") {
+                showError("กรุณาระบุเหตุผลที่ไม่สามารถแก้ไขได้");
+                return;
+              }
+
+              setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+
+              // Send both the status ID and the comment to your API
+              await api.patch(`/problems/${problemId}/status`, {
+                status_id: newStatusId,
+                comment: commentText,
+              });
+
+              showSuccess("อัพเดทสถานะสำเร็จ");
+              fetchProblems();
+            } catch (error) {
+              console.error("Error updating status:", error);
+              showError("ไม่สามารถอัพเดทสถานะได้");
+            } finally {
+              setConfirmDialog((prev) => ({
+                ...prev,
+                isOpen: false,
+                isLoading: false,
+              }));
+            }
+          },
+        });
+        return;
+      }
+
+      // For other statuses
       await api.patch(`/problems/${problemId}/status`, {
         status_id: newStatusId,
       });
@@ -370,6 +416,14 @@ function DashboardPage() {
   // Improved status badge rendering function
   const renderStatusColumn = (problem) => {
     if (isStaff) {
+      // Define the custom sort order
+      const statusOrder = [1, 2, 4, 7, 8, 3];
+
+      // Make a copy of the statuses array and sort it according to the defined order
+      const sortedStatuses = [...statuses].sort((a, b) => {
+        return statusOrder.indexOf(a.id) - statusOrder.indexOf(b.id);
+      });
+
       // For staff, show status dropdown with improved styling
       return (
         <select
@@ -386,7 +440,7 @@ function DashboardPage() {
             borderColor: problem.status_color, // Use status color only for border
           }}
         >
-          {statuses.map((status) => (
+          {sortedStatuses.map((status) => (
             <option
               key={status.id}
               value={status.id}
@@ -800,7 +854,9 @@ function DashboardPage() {
                         ผู้รับผิดชอบ
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        สถานะ
+                        {currentUser.role === "reporter"
+                          ? "สถานะ"
+                          : "จัดการสถานะ"}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         จัดการ

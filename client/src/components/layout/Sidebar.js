@@ -52,7 +52,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, isMobile }) => {
     {
       path: "/dashboard",
       icon: <MessageCircle size={isMobile ? 18 : 20} />,
-      text: "แจ้งปัญหา",
+      text: "รายการแจ้งปัญหา",
       shortText: "แจ้งปัญหา",
       show: !isAdmin,
     },

@@ -237,7 +237,8 @@ router.delete("/:id", auth, async (req, res) => {
 
 // Update problem status
 router.patch("/:id/status", auth, async (req, res) => {
-  const connection = await db.getConnection();
+  const connection = await db.getConnection(); // Get the connection first
+
   try {
     await connection.beginTransaction();
     const { id } = req.params;
@@ -303,46 +304,6 @@ router.patch("/:id/status", auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || "เกิดข้อผิดพลาดในการอัพเดทสถานะ",
-    });
-  } finally {
-    connection.release();
-  }
-});
-
-// Accept problem
-router.patch("/:id/assign", auth, async (req, res) => {
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Check if problem exists
-    const [problems] = await connection.execute(
-      "SELECT * FROM problems WHERE id = ?",
-      [req.params.id]
-    );
-
-    if (problems.length === 0) {
-      throw new Error("ไม่พบรายการที่ต้องการรับมอบหมาย");
-    }
-
-    const inProgressStatusId = 2; // In Progress status
-
-    await connection.execute(
-      `UPDATE problems SET 
-       assigned_to = ?,
-       status_id = ?,
-       updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [req.user.id, inProgressStatusId, req.params.id]
-    );
-
-    await connection.commit();
-    res.json({ success: true });
-  } catch (error) {
-    await connection.rollback();
-    res.status(500).json({
-      success: false,
-      message: error.message || "เกิดข้อผิดพลาด",
     });
   } finally {
     connection.release();

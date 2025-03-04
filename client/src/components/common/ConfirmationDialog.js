@@ -1,5 +1,5 @@
 // src/components/common/ConfirmationDialog.js
-import React from "react";
+import React, { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
 
 function ConfirmationDialog({
@@ -13,8 +13,20 @@ function ConfirmationDialog({
   confirmButtonClass = "bg-red-600 hover:bg-red-700",
   icon = <AlertCircle className="h-6 w-6 text-red-600" />,
   isLoading = false,
+  showCommentField = false,
+  confirmAction = null,
 }) {
+  const [commentText, setCommentText] = useState("");
+
   if (!isOpen) return null;
+
+  const handleConfirm = () => {
+    if (showCommentField && confirmAction) {
+      confirmAction(commentText);
+    } else if (onConfirm) {
+      onConfirm();
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
@@ -40,6 +52,19 @@ function ConfirmationDialog({
                   message
                 )}
               </div>
+
+              {/* Add comment field when needed */}
+              {showCommentField && (
+                <div className="mt-4">
+                  <textarea
+                    className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    rows="4"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="ระบุเหตุผลที่ไม่สามารถแก้ไขปัญหานี้ได้..."
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -52,7 +77,7 @@ function ConfirmationDialog({
               {cancelText}
             </button>
             <button
-              onClick={onConfirm}
+              onClick={handleConfirm}
               className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${confirmButtonClass} ${
                 isLoading ? "opacity-50 cursor-not-allowed" : ""
               }`}
