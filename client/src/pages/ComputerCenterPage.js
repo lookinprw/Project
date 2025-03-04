@@ -1,18 +1,33 @@
 // pages/ComputerCenterPage.js
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import api from "../utils/axios";
+import { useAlert } from "../context/AlertContext";
+import ConfirmationDialog from "../components/common/ConfirmationDialog";
 
 function ComputerCenterPage() {
+  const { showSuccess, showError } = useAlert();
   const [problems, setProblems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [updating, setUpdating] = useState(false);
   const [selectedProblems, setSelectedProblems] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [expandedItems, setExpandedItems] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    isLoading: false,
+    confirmButtonClass: "",
+    confirmText: "",
+    confirmAction: null,
+    showCommentField: false,
+    icon: null,
+  });
 
   // Handle window resize for responsive design
   useEffect(() => {
@@ -51,7 +66,7 @@ function ComputerCenterPage() {
         setProblems(referredProblems);
       }
     } catch (err) {
-      setError("ไม่สามารถดึงข้อมูลได้");
+      showError("ไม่สามารถดึงข้อมูลได้");
     } finally {
       setLoading(false);
     }
@@ -60,7 +75,7 @@ function ComputerCenterPage() {
   // Handle bulk status update
   const handleBulkStatusUpdate = async (statusId) => {
     if (selectedProblems.length === 0) {
-      setError("กรุณาเลือกรายการที่ต้องการอัพเดทสถานะ");
+      showError("กรุณาเลือกรายการที่ต้องการอัพเดทสถานะ");
       return;
     }
 
@@ -71,39 +86,54 @@ function ComputerCenterPage() {
 
     const confirmMessage = statusMessages[statusId];
     if (!confirmMessage) {
-      setError("ไม่พบสถานะที่ต้องการ");
+      showError("ไม่พบสถานะที่ต้องการ");
       return;
     }
 
-    if (
-      !window.confirm(
-        `ยืนยันการเปลี่ยนสถานะเป็น ${confirmMessage} จำนวน ${selectedProblems.length} รายการ?`
-      )
-    ) {
-      return;
-    }
+    // Use custom confirmation dialog
+    setConfirmDialog({
+      isOpen: true,
+      title: "ยืนยันการเปลี่ยนสถานะ",
+      message: `ยืนยันการเปลี่ยนสถานะเป็น ${confirmMessage} จำนวน ${selectedProblems.length} รายการ?`,
+      confirmText: "ยืนยัน",
+      cancelText: "ยกเลิก",
+      confirmButtonClass:
+        statusId === 8
+          ? "bg-red-600 hover:bg-red-700"
+          : "bg-green-600 hover:bg-green-700",
+      icon: <AlertCircle className="h-6 w-6 text-red-600" />,
+      isLoading: false,
+      showCommentField: false,
+      confirmAction: async () => {
+        try {
+          setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+          setUpdating(true);
 
-    try {
-      setUpdating(true);
-      setError("");
+          await Promise.all(
+            selectedProblems.map((problemId) =>
+              api.patch(`/problems/${problemId}/status`, {
+                status_id: statusId,
+                comment: confirmMessage,
+              })
+            )
+          );
 
-      await Promise.all(
-        selectedProblems.map((problemId) =>
-          api.patch(`/problems/${problemId}/status`, {
-            status_id: statusId,
-            comment: confirmMessage,
-          })
-        )
-      );
-
-      setSelectedProblems([]);
-      await fetchData();
-    } catch (err) {
-      console.error("Error updating status:", err);
-      setError("ไม่สามารถอัพเดทสถานะได้");
-    } finally {
-      setUpdating(false);
-    }
+          showSuccess(`อัพเดทสถานะเป็น ${confirmMessage} สำเร็จ`);
+          setSelectedProblems([]);
+          await fetchData();
+        } catch (err) {
+          console.error("Error updating status:", err);
+          showError("ไม่สามารถอัพเดทสถานะได้");
+        } finally {
+          setUpdating(false);
+          setConfirmDialog((prev) => ({
+            ...prev,
+            isOpen: false,
+            isLoading: false,
+          }));
+        }
+      },
+    });
   };
 
   // Initial data fetch
@@ -234,13 +264,6 @@ function ComputerCenterPage() {
           )}
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 sm:p-4 bg-red-100 text-red-700 rounded-lg flex items-center text-sm">
-            <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-            {error}
-          </div>
-        )}
-
         {/* Mobile View */}
         {isMobile && (
           <div className="space-y-1">
@@ -337,6 +360,26 @@ function ComputerCenterPage() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => {
+          if (confirmDialog.confirmAction) {
+            confirmDialog.confirmAction();
+          }
+        }}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        isLoading={confirmDialog.isLoading}
+        confirmText={confirmDialog.confirmText}
+        cancelText="ยกเลิก"
+        confirmButtonClass={confirmDialog.confirmButtonClass}
+        showCommentField={confirmDialog.showCommentField}
+        confirmAction={confirmDialog.confirmAction}
+        icon={confirmDialog.icon}
+      />
     </DashboardLayout>
   );
 }

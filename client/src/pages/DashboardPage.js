@@ -66,6 +66,8 @@ function DashboardPage() {
     confirmButtonClass: "",
     confirmText: "",
     confirmAction: null,
+    showCommentField: false,
+    icon: null,
   });
 
   const isStaff =
@@ -162,7 +164,7 @@ function DashboardPage() {
           cancelText: "ยกเลิก",
           confirmButtonClass: "bg-indigo-600 hover:bg-indigo-700",
           showCommentField: true,
-          icon: <AlertCircle className="h-6 w-6 text-indigo-600" />,
+          icon: <AlertCircle className="h-6 w-6 text-red-600" />,
           confirmAction: async (commentText) => {
             try {
               // Validate comment is not empty
@@ -315,6 +317,8 @@ function DashboardPage() {
       confirmButtonClass: "bg-red-600 hover:bg-red-700",
       confirmText: "ลบ",
       confirmAction: () => confirmDeleteProblem(problemId),
+      showCommentField: false,
+      icon: <AlertCircle className="h-6 w-6 text-red-600" />,
     });
   };
 
@@ -333,6 +337,8 @@ function DashboardPage() {
       confirmButtonClass: "bg-red-600 hover:bg-red-700",
       confirmText: "ลบทั้งหมด",
       confirmAction: confirmBulkDelete,
+      showCommentField: false,
+      icon: <AlertCircle className="h-6 w-6 text-red-600" />,
     });
   };
 
@@ -1037,7 +1043,9 @@ function DashboardPage() {
         isOpen={confirmDialog.isOpen}
         onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={() => {
-          confirmDialog.confirmAction?.();
+          if (confirmDialog.confirmAction) {
+            confirmDialog.confirmAction();
+          }
         }}
         title={confirmDialog.title}
         message={confirmDialog.message}
@@ -1045,6 +1053,9 @@ function DashboardPage() {
         confirmText={confirmDialog.confirmText}
         cancelText="ยกเลิก"
         confirmButtonClass={confirmDialog.confirmButtonClass}
+        showCommentField={confirmDialog.showCommentField}
+        confirmAction={confirmDialog.confirmAction}
+        icon={confirmDialog.icon}
       />
     </DashboardLayout>
   );
